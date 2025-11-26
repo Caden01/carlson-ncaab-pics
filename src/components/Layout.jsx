@@ -4,7 +4,7 @@ import { Trophy, LogOut, User, Menu, X, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Layout() {
-    const { user, signOut } = useAuth();
+    const { user, isAdmin, signOut } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -47,11 +47,12 @@ export default function Layout() {
                                     <User size={20} />
                                     <span>Profile</span>
                                 </Link>
-                                {/* Admin Link - In a real app, check for admin role */}
-                                <Link to="/admin" className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}>
-                                    <Settings size={20} />
-                                    <span>Admin</span>
-                                </Link>
+                                {isAdmin && (
+                                    <Link to="/admin" className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}>
+                                        <Settings size={20} />
+                                        <span>Admin</span>
+                                    </Link>
+                                )}
                                 <div className="user-menu">
                                     <span className="user-email">{user.email}</span>
                                     <button onClick={handleSignOut} className="sign-out-btn" title="Sign Out">
@@ -103,7 +104,7 @@ export default function Layout() {
                 )}
             </nav>
 
-            <main className="main-content">
+            <main className={location.pathname === '/leaderboard' ? 'full-width-content' : 'main-content'}>
                 <Outlet />
             </main>
         </div>

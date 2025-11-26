@@ -7,11 +7,12 @@ import Leaderboard from './pages/Leaderboard';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+function ProtectedRoute({ children, adminOnly = false }) {
+  const { user, isAdmin, loading } = useAuth();
 
   if (loading) return <div className="loading-screen">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
+  if (adminOnly && !isAdmin) return <Navigate to="/" />;
 
   return children;
 }
@@ -40,7 +41,7 @@ export default function App() {
               </ProtectedRoute>
             } />
             <Route path="admin" element={
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly>
                 <Admin />
               </ProtectedRoute>
             } />

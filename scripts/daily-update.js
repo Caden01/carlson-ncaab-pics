@@ -162,21 +162,28 @@ async function calculatePoints(gameId, gameData) {
     if (!picks) return;
 
     for (const pick of picks) {
-        if (pick.selected_team === winner) {
-            // Increment user points
-            // Using RPC would be better, but doing read-update for now as in Admin.jsx
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('total_points')
-                .eq('id', pick.user_id)
-                .single();
+        const isWin = pick.selected_team === winner;
 
-            if (profile) {
-                await supabase
-                    .from('profiles')
-                    .update({ total_points: profile.total_points + 1 })
-                    .eq('id', pick.user_id);
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('total_points, total_wins, total_losses')
+            .eq('id', pick.user_id)
+            .single();
+
+        if (profile) {
+            const updates = {};
+
+            if (isWin) {
+                updates.total_points = (profile.total_points || 0) + 1;
+                updates.total_wins = (profile.total_wins || 0) + 1;
+            } else {
+                updates.total_losses = (profile.total_losses || 0) + 1;
             }
+
+            await supabase
+                .from('profiles')
+                .update(updates)
+                .eq('id', pick.user_id);
         }
     }
 }
