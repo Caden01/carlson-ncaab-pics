@@ -58,7 +58,8 @@ export const fetchDailyGames = async (date) => {
                 team_b_record: getRecord(homeTeam),
                 team_b_rank: getRank(homeTeam),
                 team_b_conf_id: homeTeam.team.conferenceId,
-                team_b_abbrev: homeTeam.team.abbreviation
+                team_b_abbrev: homeTeam.team.abbreviation,
+                game_date: `${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}`
             };
         });
     } catch (error) {

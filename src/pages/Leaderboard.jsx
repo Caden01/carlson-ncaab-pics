@@ -57,9 +57,9 @@ export default function Leaderboard() {
                                 </td>
                                 <td className="user-cell">
                                     <div className="user-avatar-placeholder">
-                                        {profile.email?.charAt(0).toUpperCase()}
+                                        {(profile.username || profile.email)?.charAt(0).toUpperCase()}
                                     </div>
-                                    <span>{profile.email}</span>
+                                    <span>{profile.username || profile.email}</span>
                                 </td>
                                 <td className="points-cell">{profile.total_points}</td>
                             </tr>

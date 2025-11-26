@@ -40,22 +40,24 @@ create table games (
   team_b_rank integer,
   team_a_abbrev text,
   team_b_abbrev text,
+  game_date date, -- Stores the "scheduled date" (YYYY-MM-DD) to handle timezone issues
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Enable RLS for games
+-- RLS Policies for games
 alter table games enable row level security;
 
--- Create policies for games
-create policy "Games are viewable by everyone."
-  on games for select
-  using ( true );
+create policy "Enable read access for all users"
+on games for select
+using (true);
 
--- ALLOW ALL AUTHENTICATED USERS TO MANAGE GAMES (For Family App Simplicity)
-create policy "Authenticated users can manage games"
-  on games for all
-  using ( auth.role() = 'authenticated' )
-  with check ( auth.role() = 'authenticated' );
+create policy "Enable insert for all users"
+on games for insert
+with check (true);
+
+create policy "Enable update for all users"
+on games for update
+using (true);
 
 -- Create picks table
 create table picks (

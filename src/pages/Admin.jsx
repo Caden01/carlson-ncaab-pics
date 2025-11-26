@@ -60,7 +60,8 @@ export default function Admin() {
                         team_b_record: game.team_b_record,
                         team_b_rank: game.team_b_rank,
                         team_a_abbrev: game.team_a_abbrev,
-                        team_b_abbrev: game.team_b_abbrev
+                        team_b_abbrev: game.team_b_abbrev,
+                        game_date: game.game_date
                     }]);
                     if (!error) importedCount++;
                 }

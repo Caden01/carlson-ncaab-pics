@@ -248,6 +248,18 @@ body {
   width: 100%;
 }
 
+.btn-google {
+  background: white;
+  color: #374151;
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.btn-google:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -678,4 +690,19 @@ body {
   border-radius: 999px;
   margin-left: 0.5rem;
   font-weight: 600;
+}
+
+.team-btn.correct-pick {
+  border-color: #16a34a;
+  /* Green 600 */
+  background: #f0fdf4;
+  /* Green 50 */
+}
+
+.team-btn.incorrect-pick {
+  border-color: #dc2626;
+  /* Red 600 */
+  background: #fef2f2;
+  /* Red 50 */
+  opacity: 0.8;
 }

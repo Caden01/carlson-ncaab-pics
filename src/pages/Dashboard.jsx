@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, Lock, CheckCircle, XCircle, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { fetchDailyGames } from '../lib/espn';
 
 export default function Dashboard() {
     const { user } = useAuth();
@@ -14,21 +15,41 @@ export default function Dashboard() {
         if (user) {
             fetchGamesAndPicks();
         }
-    }, [user, selectedDate]);
+
+        // Real-time subscription for game updates
+        const subscription = supabase
+            .channel('public:games')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, (payload) => {
+                // Update local state when a game changes
+                setGames(prevGames => prevGames.map(game =>
+                    game.id === payload.new.id ? { ...game, ...payload.new } : game
+                ));
+            })
+            .subscribe();
+
+        // Polling for live scores (Distributed Worker Pattern)
+        // Only poll if there are active games on the selected date
+        const interval = setInterval(async () => {
+            const hasActiveGames = games.some(g => g.status === 'in_progress');
+            if (hasActiveGames && selectedDate === new Date().toISOString().split('T')[0]) {
+                await syncLiveScores();
+            }
+        }, 60000); // Check every minute
+
+        return () => {
+            supabase.removeChannel(subscription);
+            clearInterval(interval);
+        };
+    }, [user, selectedDate, games.length]); // Re-run if games length changes to update polling logic
 
     const fetchGamesAndPicks = async () => {
         try {
             setLoading(true);
 
-            // Fetch games for selected date
-            // We need to filter by start_time range for the selected date
-            // Note: This assumes games are stored in UTC. 
-
             const { data: gamesData, error: gamesError } = await supabase
                 .from('games')
                 .select('*')
-                .gte('start_time', new Date(selectedDate).toISOString())
-                .lt('start_time', new Date(new Date(selectedDate).getTime() + 86400000).toISOString())
+                .eq('game_date', selectedDate)
                 .order('start_time', { ascending: true });
 
             if (gamesError) throw gamesError;
@@ -55,6 +76,34 @@ export default function Dashboard() {
         }
     };
 
+    const syncLiveScores = async () => {
+        try {
+            const dateStr = selectedDate.replace(/-/g, '');
+            const espnGames = await fetchDailyGames(dateStr);
+
+            for (const espnGame of espnGames) {
+                const dbGame = games.find(g => g.external_id === espnGame.external_id);
+                if (dbGame) {
+                    // Only update if something changed
+                    if (dbGame.status !== (espnGame.status === 'post' ? 'finished' : (espnGame.status === 'pre' ? 'scheduled' : 'in_progress')) ||
+                        dbGame.result_a !== espnGame.result_a ||
+                        dbGame.result_b !== espnGame.result_b) {
+
+                        const newStatus = espnGame.status === 'post' ? 'finished' : (espnGame.status === 'pre' ? 'scheduled' : 'in_progress');
+
+                        await supabase.from('games').update({
+                            status: newStatus,
+                            result_a: espnGame.result_a,
+                            result_b: espnGame.result_b,
+                        }).eq('id', dbGame.id);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error syncing live scores:', error);
+        }
+    };
+
     const handlePick = async (gameId, team) => {
         // Optimistic update
         const previousPick = picks[gameId];
@@ -70,11 +119,8 @@ export default function Dashboard() {
                 }, { onConflict: 'user_id, game_id' });
 
             if (error) throw error;
-
-            // If successful, the optimistic update is fine.
         } catch (error) {
             console.error('Error saving pick:', error);
-            // Revert on error
             setPicks(prev => ({ ...prev, [gameId]: previousPick }));
             alert('Failed to save pick. Please try again.');
         }
@@ -93,14 +139,12 @@ export default function Dashboard() {
     const checkCover = (game, team) => {
         if (game.status !== 'finished' || !game.spread || !game.spread.includes(' ')) return null;
 
-        // Parse spread: e.g., "WKU -18.5"
         const parts = game.spread.split(' ');
-        const spreadTeamAbbrev = parts[0]; // Use abbrev for matching
+        const spreadTeamAbbrev = parts[0];
         const spreadValue = parseFloat(parts[1]);
 
         if (isNaN(spreadValue)) return null;
 
-        // Determine if team is the spread team
         let isSpreadTeam = false;
         if (game.team_a_abbrev === spreadTeamAbbrev) {
             if (team === game.team_a) isSpreadTeam = true;
@@ -108,25 +152,20 @@ export default function Dashboard() {
             if (team === game.team_b) isSpreadTeam = true;
         }
 
-        // Calculate margin for the selected 'team'
-        // If 'team' is team_a, margin is team_a_score - team_b_score
-        // If 'team' is team_b, margin is team_b_score - team_a_score
         const margin = team === game.team_a
             ? game.result_a - game.result_b
             : game.result_b - game.result_a;
 
-        // If this is the spread team (favorite usually has minus), add spread (which is negative)
-        // If this is the underdog, they are covering if (margin > -spread) effectively.
-
-        let effectiveSpread = 0;
-        if (isSpreadTeam) {
-            effectiveSpread = spreadValue;
-        } else {
-            // If the current team is not the spread team, the effective spread for them is the opposite
-            effectiveSpread = -spreadValue;
-        }
+        let effectiveSpread = isSpreadTeam ? spreadValue : -spreadValue;
 
         return (margin + effectiveSpread) > 0;
+    };
+
+    const getPickStatus = (game, userPick) => {
+        if (game.status !== 'finished' || !userPick) return null;
+
+        const winner = game.result_a > game.result_b ? game.team_a : game.team_b;
+        return userPick === winner ? 'correct' : 'incorrect';
     };
 
     if (loading) {
@@ -164,6 +203,7 @@ export default function Dashboard() {
                     {games.map(game => {
                         const isLocked = isGameLocked(game.start_time);
                         const userPick = picks[game.id];
+                        const pickStatus = getPickStatus(game, userPick);
 
                         return (
                             <div key={game.id} className="game-card">
@@ -187,7 +227,11 @@ export default function Dashboard() {
                                     </div>
                                     <div className="game-meta">
                                         <span className="game-time">
-                                            {new Date(game.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {game.status === 'in_progress' ? (
+                                                <span className="text-red-500 font-bold animate-pulse">LIVE</span>
+                                            ) : (
+                                                new Date(game.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                            )}
                                         </span>
                                         {game.spread && <span className="game-spread">{game.spread}</span>}
                                         {game.status !== 'scheduled' && (
@@ -199,22 +243,30 @@ export default function Dashboard() {
                                 </div>
                                 <div className="teams-container">
                                     <button
-                                        className={`team-btn ${userPick === game.team_a ? 'selected' : ''} ${isLocked ? 'locked' : ''}`}
+                                        className={`team-btn ${userPick === game.team_a ? 'selected' : ''} ${isLocked ? 'locked' : ''} ${pickStatus === 'correct' && userPick === game.team_a ? 'correct-pick' : ''} ${pickStatus === 'incorrect' && userPick === game.team_a ? 'incorrect-pick' : ''}`}
                                         onClick={() => !isLocked && handlePick(game.id, game.team_a)}
                                         disabled={isLocked}
                                     >
-                                        <span>{game.team_a}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span>{game.team_a}</span>
+                                            {pickStatus === 'correct' && userPick === game.team_a && <CheckCircle size={16} className="text-green-600" />}
+                                            {pickStatus === 'incorrect' && userPick === game.team_a && <XCircle size={16} className="text-red-500" />}
+                                        </div>
                                         {game.status === 'finished' && checkCover(game, game.team_a) && (
                                             <span className="cover-badge">Covered</span>
                                         )}
                                     </button>
                                     <div className="vs-badge">VS</div>
                                     <button
-                                        className={`team-btn ${userPick === game.team_b ? 'selected' : ''} ${isLocked ? 'locked' : ''}`}
+                                        className={`team-btn ${userPick === game.team_b ? 'selected' : ''} ${isLocked ? 'locked' : ''} ${pickStatus === 'correct' && userPick === game.team_b ? 'correct-pick' : ''} ${pickStatus === 'incorrect' && userPick === game.team_b ? 'incorrect-pick' : ''}`}
                                         onClick={() => !isLocked && handlePick(game.id, game.team_b)}
                                         disabled={isLocked}
                                     >
-                                        <span>{game.team_b}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span>{game.team_b}</span>
+                                            {pickStatus === 'correct' && userPick === game.team_b && <CheckCircle size={16} className="text-green-600" />}
+                                            {pickStatus === 'incorrect' && userPick === game.team_b && <XCircle size={16} className="text-red-500" />}
+                                        </div>
                                         {game.status === 'finished' && checkCover(game, game.team_b) && (
                                             <span className="cover-badge">Covered</span>
                                         )}
