@@ -1,0 +1,30 @@
+name: Daily Game Update
+
+on:
+  schedule:
+    # Runs at 14:00 UTC daily, which is 6:00 AM PST (Standard Time) or 7:00 AM PDT (Daylight Time)
+    # 6:00 AM PST = 14:00 UTC
+    - cron: '0 14 * * *'
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  update-games:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run update script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/daily-update.js
