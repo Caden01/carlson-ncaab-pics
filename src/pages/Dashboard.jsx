@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, Lock, CheckCircle, XCircle, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Loader2, Lock, CheckCircle, XCircle, ChevronLeft, ChevronRight, Calendar, Users, ShieldAlert } from 'lucide-react';
 import { getAvatarGradient } from '../lib/utils';
 import { fetchDailyGames } from '../lib/espn';
 import { didTeamCover } from '../lib/gameLogic';
 import { importGamesForDate } from '../lib/gameImport';
 
 export default function Dashboard() {
-    const { user } = useAuth();
+    const { user, isAdmin } = useAuth();
     const [games, setGames] = useState([]);
     const [picks, setPicks] = useState({});
     const [loading, setLoading] = useState(true);
+    const [allProfiles, setAllProfiles] = useState([]);
+    const [actingUser, setActingUser] = useState(null);
     // Use local date to avoid timezone issues (e.g. UTC is tomorrow while local is today)
     const getLocalDate = () => {
         const d = new Date();
@@ -24,6 +26,16 @@ export default function Dashboard() {
     useEffect(() => {
         if (user) {
             fetchGamesAndPicks();
+            // Default acting user to self
+            setActingUser({
+                id: user.id,
+                username: user.user_metadata?.username || user.email || 'You',
+                email: user.email
+            });
+        }
+
+        if (isAdmin) {
+            fetchProfiles();
         }
 
         // Real-time subscription for game updates
@@ -124,6 +136,21 @@ export default function Dashboard() {
         }
     };
 
+
+    const fetchProfiles = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('username', { ascending: true });
+
+            if (error) throw error;
+            setAllProfiles(data || []);
+        } catch (error) {
+            console.error('Error fetching profiles:', error);
+        }
+    };
+
     const syncLiveScores = async (currentGames = null) => {
         try {
             const gamesList = currentGames || games;
@@ -172,8 +199,8 @@ export default function Dashboard() {
             const newPickObj = {
                 game_id: gameId,
                 selected_team: team,
-                user_id: user.id,
-                username: user.user_metadata?.username || user.email || 'You'
+                user_id: actingUser.id,
+                username: actingUser.username
             };
 
             if (existingPickIndex >= 0) {
@@ -189,7 +216,7 @@ export default function Dashboard() {
             const { error } = await supabase
                 .from('picks')
                 .upsert({
-                    user_id: user.id,
+                    user_id: actingUser.id,
                     game_id: gameId,
                     selected_team: team
                 }, { onConflict: 'user_id, game_id' });
@@ -203,6 +230,7 @@ export default function Dashboard() {
     };
 
     const isGameLocked = (startTime) => {
+        if (isAdmin) return false; // Admins can always pick
         return new Date() >= new Date(startTime);
     };
 
@@ -252,6 +280,41 @@ export default function Dashboard() {
                 </div>
             </header>
 
+            {isAdmin && user?.email === 'crcgames3@gmail.com' && allProfiles.length > 0 && (
+                <div className="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
+                    <div className="flex items-center gap-2 mb-2 text-amber-500 font-semibold">
+                        <ShieldAlert size={20} />
+                        <span>Admin Override Mode</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <label className="text-sm text-slate-400">Making picks for:</label>
+                        <div className="relative flex-1 max-w-xs">
+                            <select
+                                className="w-full p-2 pl-9 bg-slate-900 border border-slate-700 rounded text-white appearance-none cursor-pointer focus:border-amber-500 outline-none"
+                                value={actingUser?.id || ''}
+                                onChange={(e) => {
+                                    const selected = allProfiles.find(p => p.id === e.target.value);
+                                    if (selected) {
+                                        setActingUser({
+                                            id: selected.id,
+                                            username: selected.username || selected.email,
+                                            email: selected.email
+                                        });
+                                    }
+                                }}
+                            >
+                                {allProfiles.map(profile => (
+                                    <option key={profile.id} value={profile.id}>
+                                        {profile.username || profile.email} {profile.id === user.id ? '(You)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {games.length === 0 ? (
                 <div className="empty-state">
                     <p>No games scheduled for this date.</p>
@@ -261,7 +324,7 @@ export default function Dashboard() {
                     {games.map(game => {
                         const isLocked = isGameLocked(game.start_time);
                         const gamePicks = picks[game.id] || [];
-                        const userPickObj = gamePicks.find(p => p.user_id === user.id);
+                        const userPickObj = gamePicks.find(p => p.user_id === (actingUser?.id || user.id));
                         const userPick = userPickObj ? userPickObj.selected_team : null;
                         const pickStatus = getPickStatus(game, userPick);
 
@@ -325,7 +388,7 @@ export default function Dashboard() {
                                                     {picks[game.id].filter(p => p.selected_team === game.team_a).map((p, i) => (
                                                         <div key={i} className="avatar-wrapper">
                                                             <div
-                                                                className={`avatar ${p.user_id === user.id ? 'active' : ''}`}
+                                                                className={`avatar ${p.user_id === (actingUser?.id || user.id) ? 'active' : ''}`}
                                                                 style={{ background: getAvatarGradient(p.username) }}
                                                             >
                                                                 {p.username.charAt(0).toUpperCase()}
@@ -367,7 +430,7 @@ export default function Dashboard() {
                                                     {picks[game.id].filter(p => p.selected_team === game.team_b).map((p, i) => (
                                                         <div key={i} className="avatar-wrapper">
                                                             <div
-                                                                className={`avatar ${p.user_id === user.id ? 'active' : ''}`}
+                                                                className={`avatar ${p.user_id === (actingUser?.id || user.id) ? 'active' : ''}`}
                                                                 style={{ background: getAvatarGradient(p.username) }}
                                                             >
                                                                 {p.username.charAt(0).toUpperCase()}
