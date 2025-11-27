@@ -1061,6 +1061,25 @@ body {
   border-color: #1f2937 transparent transparent transparent;
 }
 
+/* Mobile Stats Column (Hidden by default) */
+.th-mobile-stats,
+.td-mobile-stats {
+  display: none;
+}
+
+.mobile-stats-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.mobile-winrate {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 640px) {
   .leaderboard-page {
@@ -1106,8 +1125,16 @@ body {
 @media (max-width: 480px) {
 
   .th-record,
-  .td-record {
+  .td-record,
+  .th-winrate,
+  .td-winrate {
     display: none;
+  }
+
+  .th-mobile-stats,
+  .td-mobile-stats {
+    display: table-cell;
+    text-align: right;
   }
 
   .player-info {

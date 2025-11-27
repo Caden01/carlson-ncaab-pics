@@ -64,6 +64,7 @@ export default function Leaderboard() {
                                     <th className="th-player">Player</th>
                                     <th className="th-record">Record</th>
                                     <th className="th-winrate">Win Rate</th>
+                                    <th className="th-mobile-stats">Stats</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -116,6 +117,13 @@ export default function Leaderboard() {
                                                 <div className="winrate-badge">
                                                     <Flame size={14} className="text-blue-400" />
                                                     <span>{winRate}%</span>
+                                                </div>
+                                            </td>
+
+                                            <td className="td-mobile-stats">
+                                                <div className="mobile-stats-container">
+                                                    <span className="record-text">{wins}-{losses}</span>
+                                                    <span className="mobile-winrate">{winRate}%</span>
                                                 </div>
                                             </td>
                                         </tr>
