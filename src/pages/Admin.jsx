@@ -1,10 +1,18 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchDailyGames } from '../lib/espn';
+import { didTeamCover } from '../lib/gameLogic';
 import { Loader2, RefreshCw, Download } from 'lucide-react';
 
 export default function Admin() {
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0].replace(/-/g, ''));
+    // Use local date
+    const getLocalDate = () => {
+        const d = new Date();
+        const offset = d.getTimezoneOffset() * 60000;
+        const localDate = new Date(d.getTime() - offset);
+        return localDate.toISOString().split('T')[0].replace(/-/g, '');
+    };
+    const [date, setDate] = useState(getLocalDate());
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
 
@@ -115,18 +123,24 @@ export default function Admin() {
 
                             const newStatus = espnGame.status === 'post' ? 'finished' : 'in_progress';
 
-                            await supabase.from('games').update({
+                            const updates = {
                                 status: newStatus,
                                 result_a: espnGame.result_a,
                                 result_b: espnGame.result_b,
-                                spread: espnGame.spread,
                                 team_a_record: espnGame.team_a_record,
                                 team_a_rank: espnGame.team_a_rank,
                                 team_b_record: espnGame.team_b_record,
                                 team_b_rank: espnGame.team_b_rank,
                                 team_a_abbrev: espnGame.team_a_abbrev,
                                 team_b_abbrev: espnGame.team_b_abbrev
-                            }).eq('id', dbGame.id);
+                            };
+
+                            // Only update spread if it's available from ESPN (to avoid overwriting with null)
+                            if (espnGame.spread) {
+                                updates.spread = espnGame.spread;
+                            }
+
+                            await supabase.from('games').update(updates).eq('id', dbGame.id);
 
                             updatedCount++;
 
@@ -148,9 +162,6 @@ export default function Admin() {
     };
 
     const calculatePoints = async (gameId, gameData) => {
-        // Determine winner
-        const winner = gameData.result_a > gameData.result_b ? gameData.team_a : gameData.team_b;
-
         // Get all picks for this game
         const { data: picks } = await supabase
             .from('picks')
@@ -160,7 +171,10 @@ export default function Admin() {
         if (!picks) return;
 
         for (const pick of picks) {
-            const isWin = pick.selected_team === winner;
+            // Use shared logic to determine if the picked team covered
+            const isWin = didTeamCover(gameData, pick.selected_team);
+
+            if (isWin === null) continue;
 
             const { data: profile } = await supabase
                 .from('profiles')
@@ -183,6 +197,46 @@ export default function Admin() {
                     .update(updates)
                     .eq('id', pick.user_id);
             }
+        }
+    };
+
+    const handleRecalculateStats = async () => {
+        if (!confirm('Are you sure? This will reset all user stats and recalculate them based on finished games.')) return;
+
+        setLoading(true);
+        setMessage('Resetting stats...');
+
+        try {
+            // 1. Reset all profiles
+            const { error: resetError } = await supabase
+                .from('profiles')
+                .update({ total_points: 0, total_wins: 0, total_losses: 0 })
+                .neq('id', '00000000-0000-0000-0000-000000000000'); // Update all rows
+
+            if (resetError) throw resetError;
+
+            // 2. Get all finished games
+            const { data: finishedGames, error: gamesError } = await supabase
+                .from('games')
+                .select('*')
+                .eq('status', 'finished');
+
+            if (gamesError) throw gamesError;
+
+            setMessage(`Recalculating for ${finishedGames.length} finished games...`);
+
+            let processedGames = 0;
+            for (const game of finishedGames) {
+                await calculatePoints(game.id, game);
+                processedGames++;
+            }
+
+            setMessage(`Successfully recalculated stats for ${processedGames} games.`);
+        } catch (error) {
+            console.error('Error recalculating:', error);
+            setMessage(`Error: ${error.message}`);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -224,6 +278,17 @@ export default function Admin() {
                     >
                         {loading ? <Loader2 className="animate-spin" /> : <RefreshCw size={20} />}
                         Sync Scores
+                    </button>
+                </div>
+
+                <div className="mb-4">
+                    <button
+                        onClick={handleRecalculateStats}
+                        disabled={loading}
+                        className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                        {loading ? <Loader2 className="animate-spin" /> : <RefreshCw size={20} />}
+                        Recalculate All Stats
                     </button>
                 </div>
 

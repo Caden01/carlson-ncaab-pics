@@ -2,14 +2,23 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, Lock, CheckCircle, XCircle, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { getAvatarGradient } from '../lib/utils';
 import { fetchDailyGames } from '../lib/espn';
+import { didTeamCover } from '../lib/gameLogic';
 
 export default function Dashboard() {
     const { user } = useAuth();
     const [games, setGames] = useState([]);
     const [picks, setPicks] = useState({});
     const [loading, setLoading] = useState(true);
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    // Use local date to avoid timezone issues (e.g. UTC is tomorrow while local is today)
+    const getLocalDate = () => {
+        const d = new Date();
+        const offset = d.getTimezoneOffset() * 60000;
+        const localDate = new Date(d.getTime() - offset);
+        return localDate.toISOString().split('T')[0];
+    };
+    const [selectedDate, setSelectedDate] = useState(getLocalDate());
 
     useEffect(() => {
         if (user) {
@@ -54,21 +63,37 @@ export default function Dashboard() {
 
             if (gamesError) throw gamesError;
 
-            // Fetch user picks
-            const { data: picksData, error: picksError } = await supabase
-                .from('picks')
-                .select('game_id, selected_team')
-                .eq('user_id', user.id);
+            // Fetch ALL picks for these games
+            const gameIds = gamesData.map(g => g.id);
+            let picksMap = {};
 
-            if (picksError) throw picksError;
+            if (gameIds.length > 0) {
+                const { data: picksData, error: picksError } = await supabase
+                    .from('picks')
+                    .select('game_id, selected_team, user_id, profiles(username, email)')
+                    .in('game_id', gameIds);
 
-            const picksMap = {};
-            picksData.forEach(pick => {
-                picksMap[pick.game_id] = pick.selected_team;
-            });
+                if (picksError) throw picksError;
+
+                // Group picks by game_id
+                picksData.forEach(pick => {
+                    if (!picksMap[pick.game_id]) {
+                        picksMap[pick.game_id] = [];
+                    }
+                    picksMap[pick.game_id].push({
+                        ...pick,
+                        username: pick.profiles?.username || pick.profiles?.email || 'Unknown'
+                    });
+                });
+            }
 
             setGames(gamesData || []);
             setPicks(picksMap);
+
+            // Trigger live score sync with the fetched data
+            if (gamesData && gamesData.length > 0) {
+                syncLiveScores(gamesData);
+            }
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -76,13 +101,14 @@ export default function Dashboard() {
         }
     };
 
-    const syncLiveScores = async () => {
+    const syncLiveScores = async (currentGames = null) => {
         try {
+            const gamesList = currentGames || games;
             const dateStr = selectedDate.replace(/-/g, '');
             const espnGames = await fetchDailyGames(dateStr);
 
             for (const espnGame of espnGames) {
-                const dbGame = games.find(g => g.external_id === espnGame.external_id);
+                const dbGame = gamesList.find(g => g.external_id === espnGame.external_id);
                 if (dbGame) {
                     // Only update if something changed
                     if (dbGame.status !== (espnGame.status === 'post' ? 'finished' : (espnGame.status === 'pre' ? 'scheduled' : 'in_progress')) ||
@@ -91,11 +117,17 @@ export default function Dashboard() {
 
                         const newStatus = espnGame.status === 'post' ? 'finished' : (espnGame.status === 'pre' ? 'scheduled' : 'in_progress');
 
-                        await supabase.from('games').update({
+                        const updates = {
                             status: newStatus,
                             result_a: espnGame.result_a,
                             result_b: espnGame.result_b,
-                        }).eq('id', dbGame.id);
+                        };
+
+                        if (espnGame.spread) {
+                            updates.spread = espnGame.spread;
+                        }
+
+                        await supabase.from('games').update(updates).eq('id', dbGame.id);
                     }
                 }
             }
@@ -106,8 +138,27 @@ export default function Dashboard() {
 
     const handlePick = async (gameId, team) => {
         // Optimistic update
-        const previousPick = picks[gameId];
-        setPicks(prev => ({ ...prev, [gameId]: team }));
+        const previousPicks = { ...picks };
+
+        setPicks(prev => {
+            const gamePicks = prev[gameId] ? [...prev[gameId]] : [];
+            const existingPickIndex = gamePicks.findIndex(p => p.user_id === user.id);
+
+            const newPickObj = {
+                game_id: gameId,
+                selected_team: team,
+                user_id: user.id,
+                username: user.user_metadata?.username || user.email || 'You'
+            };
+
+            if (existingPickIndex >= 0) {
+                gamePicks[existingPickIndex] = newPickObj;
+            } else {
+                gamePicks.push(newPickObj);
+            }
+
+            return { ...prev, [gameId]: gamePicks };
+        });
 
         try {
             const { error } = await supabase
@@ -121,7 +172,7 @@ export default function Dashboard() {
             if (error) throw error;
         } catch (error) {
             console.error('Error saving pick:', error);
-            setPicks(prev => ({ ...prev, [gameId]: previousPick }));
+            setPicks(previousPicks);
             alert('Failed to save pick. Please try again.');
         }
     };
@@ -137,35 +188,17 @@ export default function Dashboard() {
     };
 
     const checkCover = (game, team) => {
-        if (game.status !== 'finished' || !game.spread || !game.spread.includes(' ')) return null;
-
-        const parts = game.spread.split(' ');
-        const spreadTeamAbbrev = parts[0];
-        const spreadValue = parseFloat(parts[1]);
-
-        if (isNaN(spreadValue)) return null;
-
-        let isSpreadTeam = false;
-        if (game.team_a_abbrev === spreadTeamAbbrev) {
-            if (team === game.team_a) isSpreadTeam = true;
-        } else if (game.team_b_abbrev === spreadTeamAbbrev) {
-            if (team === game.team_b) isSpreadTeam = true;
-        }
-
-        const margin = team === game.team_a
-            ? game.result_a - game.result_b
-            : game.result_b - game.result_a;
-
-        let effectiveSpread = isSpreadTeam ? spreadValue : -spreadValue;
-
-        return (margin + effectiveSpread) > 0;
+        return didTeamCover(game, team);
     };
 
     const getPickStatus = (game, userPick) => {
-        if (game.status !== 'finished' || !userPick) return null;
+        if (game.status !== 'finished' && game.status !== 'post') return null;
+        if (!userPick) return null;
 
-        const winner = game.result_a > game.result_b ? game.team_a : game.team_b;
-        return userPick === winner ? 'correct' : 'incorrect';
+        const isWin = didTeamCover(game, userPick);
+        if (isWin === null) return null; // Can't determine
+
+        return isWin ? 'correct' : 'incorrect';
     };
 
     if (loading) {
@@ -202,7 +235,9 @@ export default function Dashboard() {
                 <div className="games-grid">
                     {games.map(game => {
                         const isLocked = isGameLocked(game.start_time);
-                        const userPick = picks[game.id];
+                        const gamePicks = picks[game.id] || [];
+                        const userPickObj = gamePicks.find(p => p.user_id === user.id);
+                        const userPick = userPickObj ? userPickObj.selected_team : null;
                         const pickStatus = getPickStatus(game, userPick);
 
                         return (
@@ -242,35 +277,87 @@ export default function Dashboard() {
                                     </div>
                                 </div>
                                 <div className="teams-container">
-                                    <button
-                                        className={`team-btn ${userPick === game.team_a ? 'selected' : ''} ${isLocked ? 'locked' : ''} ${pickStatus === 'correct' && userPick === game.team_a ? 'correct-pick' : ''} ${pickStatus === 'incorrect' && userPick === game.team_a ? 'incorrect-pick' : ''}`}
-                                        onClick={() => !isLocked && handlePick(game.id, game.team_a)}
-                                        disabled={isLocked}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span>{game.team_a}</span>
-                                            {pickStatus === 'correct' && userPick === game.team_a && <CheckCircle size={16} className="text-green-600" />}
-                                            {pickStatus === 'incorrect' && userPick === game.team_a && <XCircle size={16} className="text-red-500" />}
-                                        </div>
-                                        {game.status === 'finished' && checkCover(game, game.team_a) && (
-                                            <span className="cover-badge">Covered</span>
+                                    <div className="team-group">
+                                        <button
+                                            className={`team-btn ${userPick === game.team_a ? 'selected' : ''} ${isLocked ? 'locked' : ''} ${pickStatus === 'correct' && userPick === game.team_a ? 'correct-pick' : ''} ${pickStatus === 'incorrect' && userPick === game.team_a ? 'incorrect-pick' : ''}`}
+                                            onClick={() => !isLocked && handlePick(game.id, game.team_a)}
+                                            disabled={isLocked}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span>{game.team_a}</span>
+                                                {pickStatus === 'correct' && userPick === game.team_a && <CheckCircle size={16} className="text-green-600" />}
+                                                {pickStatus === 'incorrect' && userPick === game.team_a && <XCircle size={16} className="text-red-500" />}
+                                            </div>
+                                            {game.status === 'finished' && checkCover(game, game.team_a) && (
+                                                <span className="cover-badge">Covered</span>
+                                            )}
+                                        </button>
+
+                                        {/* Team A Picks */}
+                                        {picks[game.id]?.filter(p => p.selected_team === game.team_a).length > 0 && (
+                                            <div className="picks-container">
+                                                <div className="avatars-group">
+                                                    {picks[game.id].filter(p => p.selected_team === game.team_a).map((p, i) => (
+                                                        <div key={i} className="avatar-wrapper">
+                                                            <div
+                                                                className={`avatar ${p.user_id === user.id ? 'active' : ''}`}
+                                                                style={{ background: getAvatarGradient(p.username) }}
+                                                            >
+                                                                {p.username.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            {/* Tooltip */}
+                                                            <div className="tooltip">
+                                                                {p.username}
+                                                                <div className="tooltip-arrow"></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         )}
-                                    </button>
+                                    </div>
+
                                     <div className="vs-badge">VS</div>
-                                    <button
-                                        className={`team-btn ${userPick === game.team_b ? 'selected' : ''} ${isLocked ? 'locked' : ''} ${pickStatus === 'correct' && userPick === game.team_b ? 'correct-pick' : ''} ${pickStatus === 'incorrect' && userPick === game.team_b ? 'incorrect-pick' : ''}`}
-                                        onClick={() => !isLocked && handlePick(game.id, game.team_b)}
-                                        disabled={isLocked}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span>{game.team_b}</span>
-                                            {pickStatus === 'correct' && userPick === game.team_b && <CheckCircle size={16} className="text-green-600" />}
-                                            {pickStatus === 'incorrect' && userPick === game.team_b && <XCircle size={16} className="text-red-500" />}
-                                        </div>
-                                        {game.status === 'finished' && checkCover(game, game.team_b) && (
-                                            <span className="cover-badge">Covered</span>
+
+                                    <div className="team-group">
+                                        <button
+                                            className={`team-btn ${userPick === game.team_b ? 'selected' : ''} ${isLocked ? 'locked' : ''} ${pickStatus === 'correct' && userPick === game.team_b ? 'correct-pick' : ''} ${pickStatus === 'incorrect' && userPick === game.team_b ? 'incorrect-pick' : ''}`}
+                                            onClick={() => !isLocked && handlePick(game.id, game.team_b)}
+                                            disabled={isLocked}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span>{game.team_b}</span>
+                                                {pickStatus === 'correct' && userPick === game.team_b && <CheckCircle size={16} className="text-green-600" />}
+                                                {pickStatus === 'incorrect' && userPick === game.team_b && <XCircle size={16} className="text-red-500" />}
+                                            </div>
+                                            {game.status === 'finished' && checkCover(game, game.team_b) && (
+                                                <span className="cover-badge">Covered</span>
+                                            )}
+                                        </button>
+
+                                        {/* Team B Picks */}
+                                        {picks[game.id]?.filter(p => p.selected_team === game.team_b).length > 0 && (
+                                            <div className="picks-container right">
+                                                <div className="avatars-group reverse">
+                                                    {picks[game.id].filter(p => p.selected_team === game.team_b).map((p, i) => (
+                                                        <div key={i} className="avatar-wrapper">
+                                                            <div
+                                                                className={`avatar ${p.user_id === user.id ? 'active' : ''}`}
+                                                                style={{ background: getAvatarGradient(p.username) }}
+                                                            >
+                                                                {p.username.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            {/* Tooltip */}
+                                                            <div className="tooltip">
+                                                                {p.username}
+                                                                <div className="tooltip-arrow"></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         )}
-                                    </button>
+                                    </div>
                                 </div>
                                 {isLocked && (
                                     <div className="locked-indicator">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Trophy, Medal, Zap, Flame } from 'lucide-react';
+import { getAvatarGradient } from '../lib/utils';
 
 export default function Leaderboard() {
     const [profiles, setProfiles] = useState([]);
@@ -26,19 +27,7 @@ export default function Leaderboard() {
         }
     };
 
-    const getAvatarGradient = (index) => {
-        const gradients = [
-            'linear-gradient(135deg, #3b82f6, #2563eb)', // Blue
-            'linear-gradient(135deg, #f97316, #dc2626)', // Orange-Red
-            'linear-gradient(135deg, #a855f7, #db2777)', // Purple-Pink
-            'linear-gradient(135deg, #06b6d4, #2563eb)', // Cyan-Blue
-            'linear-gradient(135deg, #eab308, #ea580c)', // Yellow-Orange
-            'linear-gradient(135deg, #64748b, #475569)', // Slate
-            'linear-gradient(135deg, #ef4444, #ea580c)', // Red-Orange
-            'linear-gradient(135deg, #10b981, #059669)', // Green
-        ];
-        return gradients[index % gradients.length];
-    };
+    // Removed local getAvatarGradient in favor of shared utility
 
     if (loading) {
         return (
@@ -105,7 +94,7 @@ export default function Leaderboard() {
                                                 <div className="player-info">
                                                     <div
                                                         className="player-avatar"
-                                                        style={{ background: getAvatarGradient(index) }}
+                                                        style={{ background: getAvatarGradient(profile.username || profile.email) }}
                                                     >
                                                         <span>
                                                             {(profile.username || profile.email)?.charAt(0).toUpperCase()}
