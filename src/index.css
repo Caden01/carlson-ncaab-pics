@@ -3,19 +3,22 @@
   /* Orange 600 */
   --primary-hover: #c2410c;
   /* Orange 700 */
-  --bg-body: #f8fafc;
-  /* Slate 50 */
-  --bg-surface: #ffffff;
-  --text-main: #0f172a;
+  --bg-body: #0f172a;
   /* Slate 900 */
-  --text-muted: #64748b;
-  /* Slate 500 */
-  --border: #e2e8f0;
-  /* Slate 200 */
-  --danger: #dc2626;
-  /* Red 600 */
+  --bg-surface: #1e293b;
+  /* Slate 800 */
+  --text-main: #f8fafc;
+  /* Slate 50 */
+  --text-muted: #94a3b8;
+  /* Slate 400 */
+  --border: #334155;
+  /* Slate 700 */
+  --bg-secondary: #334155;
+  /* Slate 700 */
+  --danger: #ef4444;
+  /* Red 500 */
   --radius: 0.5rem;
-  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
 }
 
 * {
@@ -224,7 +227,7 @@ body {
 }
 
 .user-icon {
-  background: #f1f5f9;
+  background: var(--bg-secondary);
   padding: 4px;
   border-radius: 50%;
   color: var(--text-muted);
@@ -249,15 +252,15 @@ body {
 }
 
 .btn-google {
-  background: white;
-  color: #374151;
+  background: var(--bg-surface);
+  color: var(--text-main);
   border: 1px solid var(--border);
   font-weight: 500;
 }
 
 .btn-google:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--bg-secondary);
+  border-color: var(--border);
 }
 
 /* Buttons */
@@ -353,7 +356,7 @@ body {
   width: 100%;
   padding: 0.5rem 1rem;
   border-radius: var(--radius);
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -479,13 +482,13 @@ body {
   letter-spacing: 0.05em;
   padding: 0.25rem 0.5rem;
   border-radius: 9999px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: #334155;
+  color: #94a3b8;
 }
 
 .game-status.scheduled {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(22, 101, 52, 0.2);
+  color: #4ade80;
 }
 
 .teams-container {
@@ -505,7 +508,8 @@ body {
   padding: 0.25rem 0.5rem;
   border-radius: 9999px;
   z-index: 10;
-  margin: -1rem 0; /* overlap effect */
+  margin: -1rem 0;
+  /* overlap effect */
 }
 
 .team-btn {
@@ -515,7 +519,7 @@ body {
   padding: 1rem;
   border: 2px solid var(--border);
   border-radius: var(--radius);
-  background: white;
+  background: var(--bg-surface);
   cursor: pointer;
   transition: all 0.2s;
   width: 100%;
@@ -525,24 +529,24 @@ body {
 
 .team-btn:hover:not(:disabled) {
   border-color: var(--primary);
-  background: #fff7ed;
+  background: rgba(234, 88, 12, 0.1);
 }
 
 .team-btn.selected {
   border-color: var(--primary);
-  background: #fff7ed;
+  background: rgba(234, 88, 12, 0.1);
   color: var(--primary);
 }
 
 .team-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: #f8fafc;
+  background: var(--bg-body);
 }
 
 .team-btn.locked {
   border-color: var(--border);
-  background: #f1f5f9;
+  background: var(--bg-body);
 }
 
 /* Leaderboard */
@@ -627,7 +631,7 @@ body {
 }
 
 .top-rank {
-  background: #fffbeb;
+  background: rgba(254, 243, 199, 0.1);
 }
 
 .empty-cell {
@@ -693,14 +697,14 @@ body {
 .team-btn.correct-pick {
   border-color: #16a34a;
   /* Green 600 */
-  background: #f0fdf4;
+  background: rgba(22, 163, 74, 0.1);
   /* Green 50 */
 }
 
 .team-btn.incorrect-pick {
   border-color: #dc2626;
   /* Red 600 */
-  background: #fef2f2;
+  background: rgba(220, 38, 38, 0.1);
   /* Red 50 */
   opacity: 0.8;
 }
@@ -970,6 +974,7 @@ body {
     padding: 2rem;
   }
 }
+
 /* Picks Avatars */
 .picks-container {
   margin-top: 0.5rem;
@@ -994,11 +999,11 @@ body {
   position: relative;
 }
 
-.avatars-group > .avatar-wrapper:not(:first-child) {
+.avatars-group>.avatar-wrapper:not(:first-child) {
   margin-left: -0.5rem;
 }
 
-.avatars-group.reverse > .avatar-wrapper:not(:first-child) {
+.avatars-group.reverse>.avatar-wrapper:not(:first-child) {
   margin-left: 0;
   margin-right: -0.5rem;
 }
@@ -1054,4 +1059,66 @@ body {
   border-width: 4px;
   border-style: solid;
   border-color: #1f2937 transparent transparent transparent;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .leaderboard-page {
+    padding: 0.5rem;
+  }
+
+  .leaderboard-header-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .header-title {
+    font-size: 1.5rem;
+  }
+
+  .header-subtitle {
+    font-size: 0.875rem;
+  }
+
+  .leaderboard-table-new th,
+  .leaderboard-table-new td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .player-avatar {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .rank-badge {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .th-rank {
+    width: 3.5rem;
+  }
+
+  .th-winrate {
+    width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+
+  .th-record,
+  .td-record {
+    display: none;
+  }
+
+  .player-info {
+    gap: 0.5rem;
+  }
+
+  .player-name {
+    font-size: 0.875rem;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

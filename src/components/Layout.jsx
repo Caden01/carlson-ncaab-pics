@@ -47,7 +47,7 @@ export default function Layout() {
                                     <User size={20} />
                                     <span>Profile</span>
                                 </Link>
-                                {isAdmin && (
+                                {isAdmin && user?.email === 'crcgames3@gmail.com' && (
                                     <Link to="/admin" className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}>
                                         <Settings size={20} />
                                         <span>Admin</span>
@@ -74,7 +74,9 @@ export default function Layout() {
                                 <Link to="/" onClick={() => setIsMenuOpen(false)} className="mobile-nav-link">Dashboard</Link>
                                 <Link to="/leaderboard" onClick={() => setIsMenuOpen(false)} className="mobile-nav-link">Leaderboard</Link>
                                 <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="mobile-nav-link">Profile</Link>
-                                <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="mobile-nav-link">Admin</Link>
+                                {isAdmin && user?.email === 'crcgames3@gmail.com' && (
+                                    <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="mobile-nav-link">Admin</Link>
+                                )}
                                 <div className="mobile-user-info">
                                     <div className="user-details">
                                         <User size={24} className="user-icon" />
