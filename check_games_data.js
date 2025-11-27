@@ -21,7 +21,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function checkGames() {
     const { data: games, error } = await supabase
         .from('games')
-        .select('*')
+        .select('id, team_a, team_b, start_time, game_date, status')
+        .ilike('team_a', '%St. John%')
         .limit(5);
 
     if (error) {

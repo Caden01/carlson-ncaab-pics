@@ -5,6 +5,7 @@ import { Loader2, Lock, CheckCircle, XCircle, ChevronLeft, ChevronRight, Calenda
 import { getAvatarGradient } from '../lib/utils';
 import { fetchDailyGames } from '../lib/espn';
 import { didTeamCover } from '../lib/gameLogic';
+import { importGamesForDate } from '../lib/gameImport';
 
 export default function Dashboard() {
     const { user } = useAuth();
@@ -63,8 +64,30 @@ export default function Dashboard() {
 
             if (gamesError) throw gamesError;
 
+            let finalGamesData = gamesData || [];
+
+            // Auto-import if no games found
+            if (finalGamesData.length === 0) {
+                console.log('No games found in DB, attempting auto-import...');
+                const dateStr = selectedDate.replace(/-/g, '');
+                const importedCount = await importGamesForDate(dateStr);
+
+                if (importedCount > 0) {
+                    // Re-fetch games
+                    const { data: refetchedGames } = await supabase
+                        .from('games')
+                        .select('*')
+                        .eq('game_date', selectedDate)
+                        .order('start_time', { ascending: true });
+
+                    if (refetchedGames) {
+                        finalGamesData = refetchedGames;
+                    }
+                }
+            }
+
             // Fetch ALL picks for these games
-            const gameIds = gamesData.map(g => g.id);
+            const gameIds = finalGamesData.map(g => g.id);
             let picksMap = {};
 
             if (gameIds.length > 0) {
@@ -87,12 +110,12 @@ export default function Dashboard() {
                 });
             }
 
-            setGames(gamesData || []);
+            setGames(finalGamesData);
             setPicks(picksMap);
 
             // Trigger live score sync with the fetched data
-            if (gamesData && gamesData.length > 0) {
-                syncLiveScores(gamesData);
+            if (finalGamesData.length > 0) {
+                syncLiveScores(finalGamesData);
             }
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -121,6 +144,8 @@ export default function Dashboard() {
                             status: newStatus,
                             result_a: espnGame.result_a,
                             result_b: espnGame.result_b,
+                            team_a_abbrev: espnGame.team_a_abbrev,
+                            team_b_abbrev: espnGame.team_b_abbrev,
                         };
 
                         if (espnGame.spread) {
@@ -219,7 +244,7 @@ export default function Dashboard() {
                     </button>
                     <div className="current-date">
                         <Calendar size={20} />
-                        <span>{new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                        <span>{new Date(selectedDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                     </div>
                     <button onClick={() => changeDate(1)} className="icon-btn">
                         <ChevronRight size={24} />
