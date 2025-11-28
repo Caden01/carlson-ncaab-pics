@@ -14,6 +14,52 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const MAJOR_CONFERENCES = ['2', '4', '7', '8', '23'];
 
+// Helper to determine if a team covered the spread
+function didTeamCover(game, teamName) {
+    if (game.status !== 'finished' && game.status !== 'post') return null;
+    if (!game.spread || !game.spread.includes(' ')) return null;
+
+    const parts = game.spread.split(' ');
+    const spreadTeamAbbrev = parts[0];
+    const spreadValue = parseFloat(parts[1]);
+
+    if (isNaN(spreadValue)) return null;
+
+    let isSpreadTeam = false;
+    if (game.team_a_abbrev === spreadTeamAbbrev) {
+        if (teamName === game.team_a) isSpreadTeam = true;
+    } else if (game.team_b_abbrev === spreadTeamAbbrev) {
+        if (teamName === game.team_b) isSpreadTeam = true;
+    } else {
+        return null;
+    }
+
+    const margin = teamName === game.team_a
+        ? game.result_a - game.result_b
+        : game.result_b - game.result_a;
+
+    const effectiveSpread = isSpreadTeam ? spreadValue : -spreadValue;
+    return (margin + effectiveSpread) > 0;
+}
+
+// Get Monday of a given week
+function getWeekStart(date = new Date()) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    return monday.toISOString().split('T')[0];
+}
+
+// Get Sunday of a given week
+function getWeekEnd(date = new Date()) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? 0 : 7);
+    const sunday = new Date(d.setDate(diff));
+    return sunday.toISOString().split('T')[0];
+}
+
 async function syncActiveGames() {
     console.log('--- Syncing Active Games ---');
     try {
@@ -152,13 +198,7 @@ async function importTodaysGames() {
 }
 
 async function calculatePoints(gameId, gameData) {
-    // Determine winner (Straight Up for now, based on existing logic)
-    // Wait, does the user want points for Spread or Straight Up?
-    // The original requirement was "pick winners". 
-    // The spread was added as info. 
-    // The Admin.jsx logic uses straight up winner. I will stick to that.
-
-    const winner = gameData.result_a > gameData.result_b ? gameData.team_a : gameData.team_b;
+    // Use spread/cover logic to determine wins
 
     const { data: picks } = await supabase
         .from('picks')
@@ -168,7 +208,10 @@ async function calculatePoints(gameId, gameData) {
     if (!picks) return;
 
     for (const pick of picks) {
-        const isWin = pick.selected_team === winner;
+        const isWin = didTeamCover(gameData, pick.selected_team);
+        
+        // Skip if we can't determine the result (missing spread data, etc.)
+        if (isWin === null) continue;
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -194,9 +237,138 @@ async function calculatePoints(gameId, gameData) {
     }
 }
 
+async function calculateWeeklyWinner() {
+    console.log('--- Checking Weekly Winners ---');
+    try {
+        // Get last week's date range (previous Monday to Sunday)
+        const today = new Date();
+        const lastWeekDate = new Date(today);
+        lastWeekDate.setDate(today.getDate() - 7);
+        
+        const weekStart = getWeekStart(lastWeekDate);
+        const weekEnd = getWeekEnd(lastWeekDate);
+
+        console.log(`Checking week: ${weekStart} to ${weekEnd}`);
+
+        // Check if we already have a winner for this week
+        const { data: existingWinner } = await supabase
+            .from('weekly_winners')
+            .select('id')
+            .eq('week_start', weekStart)
+            .single();
+
+        if (existingWinner) {
+            console.log('Weekly winner already calculated for this week.');
+            return;
+        }
+
+        // Get all finished games for that week
+        const { data: games, error: gamesError } = await supabase
+            .from('games')
+            .select('*')
+            .gte('game_date', weekStart)
+            .lte('game_date', weekEnd)
+            .eq('status', 'finished');
+
+        if (gamesError) throw gamesError;
+
+        if (!games || games.length === 0) {
+            console.log('No finished games for this week.');
+            return;
+        }
+
+        const gameIds = games.map(g => g.id);
+
+        // Get all picks for these games
+        const { data: picks, error: picksError } = await supabase
+            .from('picks')
+            .select('user_id, game_id, selected_team')
+            .in('game_id', gameIds);
+
+        if (picksError) throw picksError;
+
+        // Calculate wins/losses for each user
+        const userRecords = {};
+
+        (picks || []).forEach(pick => {
+            const game = games.find(g => g.id === pick.game_id);
+            if (!game) return;
+
+            const covered = didTeamCover(game, pick.selected_team);
+            if (covered === null) return;
+
+            if (!userRecords[pick.user_id]) {
+                userRecords[pick.user_id] = { wins: 0, losses: 0 };
+            }
+
+            if (covered) {
+                userRecords[pick.user_id].wins++;
+            } else {
+                userRecords[pick.user_id].losses++;
+            }
+        });
+
+        // Find the winner (most wins, then fewest losses as tiebreaker)
+        let winnerId = null;
+        let winnerWins = 0;
+        let winnerLosses = Infinity;
+
+        for (const [userId, record] of Object.entries(userRecords)) {
+            if (record.wins > winnerWins || 
+                (record.wins === winnerWins && record.losses < winnerLosses)) {
+                winnerId = userId;
+                winnerWins = record.wins;
+                winnerLosses = record.losses;
+            }
+        }
+
+        if (!winnerId || winnerWins === 0) {
+            console.log('No winner for this week (no one made picks or no wins).');
+            return;
+        }
+
+        console.log(`Weekly winner: ${winnerId} with ${winnerWins}-${winnerLosses}`);
+
+        // Insert weekly winner
+        const { error: insertError } = await supabase
+            .from('weekly_winners')
+            .insert({
+                user_id: winnerId,
+                week_start: weekStart,
+                week_end: weekEnd,
+                wins: winnerWins,
+                losses: winnerLosses
+            });
+
+        if (insertError) {
+            console.error('Error inserting weekly winner:', insertError);
+            return;
+        }
+
+        // Increment weekly_wins on the winner's profile
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('weekly_wins')
+            .eq('id', winnerId)
+            .single();
+
+        if (profile) {
+            await supabase
+                .from('profiles')
+                .update({ weekly_wins: (profile.weekly_wins || 0) + 1 })
+                .eq('id', winnerId);
+        }
+
+        console.log('Weekly winner recorded successfully!');
+    } catch (error) {
+        console.error('Error calculating weekly winner:', error);
+    }
+}
+
 async function main() {
     await syncActiveGames();
     await importTodaysGames();
+    await calculateWeeklyWinner();
 }
 
 main();
