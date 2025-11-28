@@ -125,15 +125,24 @@ export default function Admin() {
 
                             const updates = {
                                 status: newStatus,
-                                result_a: espnGame.result_a,
-                                result_b: espnGame.result_b,
                                 team_a_record: espnGame.team_a_record,
                                 team_a_rank: espnGame.team_a_rank,
                                 team_b_record: espnGame.team_b_record,
                                 team_b_rank: espnGame.team_b_rank,
-                                team_a_abbrev: espnGame.team_a_abbrev,
-                                team_b_abbrev: espnGame.team_b_abbrev
                             };
+
+                            // Check if teams are swapped in DB compared to ESPN
+                            if (dbGame.team_a === espnGame.team_b && dbGame.team_b === espnGame.team_a) {
+                                updates.result_a = espnGame.result_b;
+                                updates.result_b = espnGame.result_a;
+                                updates.team_a_abbrev = espnGame.team_b_abbrev;
+                                updates.team_b_abbrev = espnGame.team_a_abbrev;
+                            } else {
+                                updates.result_a = espnGame.result_a;
+                                updates.result_b = espnGame.result_b;
+                                updates.team_a_abbrev = espnGame.team_a_abbrev;
+                                updates.team_b_abbrev = espnGame.team_b_abbrev;
+                            }
 
                             // Only update spread if it's available from ESPN (to avoid overwriting with null)
                             if (espnGame.spread) {
