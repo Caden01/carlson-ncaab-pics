@@ -103,11 +103,16 @@ async function importTodaysGames() {
         for (const game of games) {
             // Filter: Only import games with spread <= 12. Skip if no spread.
             if (!game.spread_value || Math.abs(game.spread_value) > 12) {
+                console.log(`Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12 or missing`);
                 continue;
             }
 
             // Filter: Must include at least one team from major conferences
-            if (!MAJOR_CONFERENCES.includes(game.team_a_conf_id) && !MAJOR_CONFERENCES.includes(game.team_b_conf_id)) {
+            // Convert to strings since ESPN API returns conference IDs as numbers
+            const teamAConf = String(game.team_a_conf_id);
+            const teamBConf = String(game.team_b_conf_id);
+            if (!MAJOR_CONFERENCES.includes(teamAConf) && !MAJOR_CONFERENCES.includes(teamBConf)) {
+                console.log(`Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`);
                 continue;
             }
 
@@ -133,7 +138,8 @@ async function importTodaysGames() {
                     team_b_record: game.team_b_record,
                     team_b_rank: game.team_b_rank,
                     team_a_abbrev: game.team_a_abbrev,
-                    team_b_abbrev: game.team_b_abbrev
+                    team_b_abbrev: game.team_b_abbrev,
+                    game_date: game.game_date
                 }]);
                 if (!error) importedCount++;
                 else console.error('Error inserting game:', error);

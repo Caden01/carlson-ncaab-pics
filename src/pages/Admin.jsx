@@ -34,15 +34,12 @@ export default function Admin() {
                 }
 
                 // Filter: Must include at least one team from major conferences
-                // SEC=8, Big Ten=7, Big 12=8, Big East=4, ACC=2
-                // Note: SEC and Big 12 might share ID 8 in some contexts or I need to verify IDs.
-                // Let's use a list of known IDs. 
-                // SEC: 8, Big 10: 7, Big 12: 8 (Wait, need to verify IDs).
-                // Actually, let's just define the allowed IDs.
-                // ACC: 2, Big East: 4, Big Ten: 7, Big 12: 8, SEC: 23 (SEC is usually 23, Big 12 is 8)
-                // Let's verify IDs first or use a broad list.
+                // ACC: 2, Big East: 4, Big Ten: 7, Big 12: 8, SEC: 23
                 const MAJOR_CONFERENCES = ['2', '4', '7', '8', '23'];
-                if (!MAJOR_CONFERENCES.includes(game.team_a_conf_id) && !MAJOR_CONFERENCES.includes(game.team_b_conf_id)) {
+                // Convert to strings since ESPN API returns conference IDs as numbers
+                const teamAConf = String(game.team_a_conf_id);
+                const teamBConf = String(game.team_b_conf_id);
+                if (!MAJOR_CONFERENCES.includes(teamAConf) && !MAJOR_CONFERENCES.includes(teamBConf)) {
                     continue;
                 }
 
