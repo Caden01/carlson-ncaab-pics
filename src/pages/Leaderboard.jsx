@@ -11,13 +11,21 @@ export default function Leaderboard() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('week'); // 'today', 'week', 'season'
 
+    // Format date as YYYY-MM-DD in local timezone
+    const formatLocalDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     // Get Monday of the current week (for week calculations)
     const getWeekStart = (date = new Date()) => {
         const d = new Date(date);
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
-        const monday = new Date(d.setDate(diff));
-        return monday.toISOString().split('T')[0];
+        d.setDate(diff);
+        return formatLocalDate(d);
     };
 
     // Get Sunday of the current week
@@ -25,16 +33,13 @@ export default function Leaderboard() {
         const d = new Date(date);
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? 0 : 7); // Adjust for Sunday
-        const sunday = new Date(d.setDate(diff));
-        return sunday.toISOString().split('T')[0];
+        d.setDate(diff);
+        return formatLocalDate(d);
     };
 
     // Get today's date in local timezone
     const getLocalDate = () => {
-        const d = new Date();
-        const offset = d.getTimezoneOffset() * 60000;
-        const localDate = new Date(d.getTime() - offset);
-        return localDate.toISOString().split('T')[0];
+        return formatLocalDate(new Date());
     };
 
     useEffect(() => {
