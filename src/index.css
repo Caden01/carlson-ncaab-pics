@@ -1205,6 +1205,79 @@ body {
   }
 }
 
+/* Date Navigation */
+.date-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.75rem;
+}
+
+.date-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 0.5rem;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-nav-btn:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.date-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.date-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 0.5rem;
+  color: #f1f5f9;
+  font-weight: 600;
+  min-width: 160px;
+  justify-content: center;
+}
+
+.date-display svg {
+  color: #3b82f6;
+}
+
+/* Table Header with Games Count */
+.table-header-label {
+  padding: 1rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  background: rgba(30, 41, 59, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.games-count {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
 /* Weekly Winners Section */
 .weekly-winners-section {
   background: rgba(15, 23, 42, 0.5);
@@ -1285,16 +1358,6 @@ body {
   background: rgba(16, 185, 129, 0.1);
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-}
-
-/* Table Header Label */
-.table-header-label {
-  padding: 1rem 1.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #94a3b8;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
-  background: rgba(30, 41, 59, 0.3);
 }
 
 /* Weekly Wins Column */

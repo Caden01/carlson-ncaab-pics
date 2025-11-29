@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Trophy, Medal, Zap, Flame, Calendar, CalendarDays, Crown, Award } from 'lucide-react';
+import { Trophy, Medal, Zap, Flame, Calendar, CalendarDays, Crown, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getAvatarGradient } from '../lib/utils';
 import { didTeamCover } from '../lib/gameLogic';
 
@@ -9,8 +9,8 @@ export default function Leaderboard() {
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [weeklyWinners, setWeeklyWinners] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('week'); // 'today', 'week', 'season'
-
+    const [activeTab, setActiveTab] = useState('week'); // 'daily', 'week', 'season'
+    
     // Format date as YYYY-MM-DD in local timezone
     const formatLocalDate = (date) => {
         const year = date.getFullYear();
@@ -18,6 +18,13 @@ export default function Leaderboard() {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     };
+
+    // Get today's date in local timezone
+    const getLocalDate = () => {
+        return formatLocalDate(new Date());
+    };
+
+    const [selectedDate, setSelectedDate] = useState(getLocalDate());
 
     // Get Monday of the current week (for week calculations)
     const getWeekStart = (date = new Date()) => {
@@ -37,14 +44,16 @@ export default function Leaderboard() {
         return formatLocalDate(d);
     };
 
-    // Get today's date in local timezone
-    const getLocalDate = () => {
-        return formatLocalDate(new Date());
+    // Change date for daily view
+    const changeDate = (days) => {
+        const date = new Date(selectedDate + 'T00:00:00');
+        date.setDate(date.getDate() + days);
+        setSelectedDate(formatLocalDate(date));
     };
 
     useEffect(() => {
         fetchData();
-    }, [activeTab]);
+    }, [activeTab, selectedDate]);
 
     const fetchData = async () => {
         try {
@@ -80,10 +89,9 @@ export default function Leaderboard() {
     const calculateRecords = async (profilesList, period) => {
         try {
             let dateFilter = {};
-            const today = getLocalDate();
 
-            if (period === 'today') {
-                dateFilter = { start: today, end: today };
+            if (period === 'daily') {
+                dateFilter = { start: selectedDate, end: selectedDate };
             } else if (period === 'week') {
                 dateFilter = { start: getWeekStart(), end: getWeekEnd() };
             }
@@ -106,7 +114,7 @@ export default function Leaderboard() {
                 return;
             }
 
-            // For today/week, calculate dynamically from picks
+            // For daily/week, calculate dynamically from picks
             const { data: games, error: gamesError } = await supabase
                 .from('games')
                 .select('*')
@@ -122,7 +130,8 @@ export default function Leaderboard() {
                     ...profile,
                     wins: 0,
                     losses: 0,
-                    weeklyWins: profile.weekly_wins || 0
+                    weeklyWins: profile.weekly_wins || 0,
+                    gamesCount: 0
                 }));
                 setLeaderboardData(ranked);
                 return;
@@ -167,7 +176,8 @@ export default function Leaderboard() {
                 ...profile,
                 wins: userRecords[profile.id]?.wins || 0,
                 losses: userRecords[profile.id]?.losses || 0,
-                weeklyWins: profile.weekly_wins || 0
+                weeklyWins: profile.weekly_wins || 0,
+                gamesCount: games.length
             })).sort((a, b) => {
                 // Sort by wins, then by fewer losses
                 if (b.wins !== a.wins) return b.wins - a.wins;
@@ -183,11 +193,30 @@ export default function Leaderboard() {
 
     const getTabLabel = () => {
         switch (activeTab) {
-            case 'today': return "Today's Standings";
+            case 'daily': {
+                const dateObj = new Date(selectedDate + 'T00:00:00');
+                const today = getLocalDate();
+                const yesterday = formatLocalDate(new Date(new Date().setDate(new Date().getDate() - 1)));
+                
+                if (selectedDate === today) {
+                    return "Today's Standings";
+                } else if (selectedDate === yesterday) {
+                    return "Yesterday's Standings";
+                } else {
+                    return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+                }
+            }
             case 'week': return "This Week's Standings";
             case 'season': return "Season Standings";
             default: return "Standings";
         }
+    };
+
+    const getGamesCount = () => {
+        if (leaderboardData.length > 0 && leaderboardData[0].gamesCount !== undefined) {
+            return leaderboardData[0].gamesCount;
+        }
+        return 0;
     };
 
     if (loading) {
@@ -219,18 +248,18 @@ export default function Leaderboard() {
                 {/* Tab Navigation */}
                 <div className="leaderboard-tabs">
                     <button
-                        className={`tab-btn ${activeTab === 'today' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('today')}
+                        className={`tab-btn ${activeTab === 'daily' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('daily')}
                     >
                         <Calendar size={16} />
-                        <span>Today</span>
+                        <span>Daily</span>
                     </button>
                     <button
                         className={`tab-btn ${activeTab === 'week' ? 'active' : ''}`}
                         onClick={() => setActiveTab('week')}
                     >
                         <CalendarDays size={16} />
-                        <span>This Week</span>
+                        <span>Week</span>
                     </button>
                     <button
                         className={`tab-btn ${activeTab === 'season' ? 'active' : ''}`}
@@ -240,6 +269,32 @@ export default function Leaderboard() {
                         <span>Season</span>
                     </button>
                 </div>
+
+                {/* Date Navigation for Daily tab */}
+                {activeTab === 'daily' && (
+                    <div className="date-navigation">
+                        <button onClick={() => changeDate(-1)} className="date-nav-btn">
+                            <ChevronLeft size={20} />
+                        </button>
+                        <div className="date-display">
+                            <Calendar size={18} />
+                            <span>
+                                {new Date(selectedDate + 'T00:00:00').toLocaleDateString(undefined, { 
+                                    weekday: 'short', 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                })}
+                            </span>
+                        </div>
+                        <button 
+                            onClick={() => changeDate(1)} 
+                            className="date-nav-btn"
+                            disabled={selectedDate >= getLocalDate()}
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
+                )}
 
                 {/* Weekly Winners Section */}
                 {weeklyWinners.length > 0 && (
@@ -274,7 +329,12 @@ export default function Leaderboard() {
 
                 <div className="leaderboard-card-new">
                     <div className="table-header-label">
-                        {getTabLabel()}
+                        <span>{getTabLabel()}</span>
+                        {(activeTab === 'daily' || activeTab === 'week') && (
+                            <span className="games-count">
+                                {getGamesCount()} game{getGamesCount() !== 1 ? 's' : ''} finished
+                            </span>
+                        )}
                     </div>
                     <div className="table-responsive">
                         <table className="leaderboard-table-new">
