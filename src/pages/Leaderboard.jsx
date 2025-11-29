@@ -429,6 +429,12 @@ export default function Leaderboard() {
                                                 <div className="mobile-stats-container">
                                                     <span className="record-text">{wins}-{losses}</span>
                                                     <span className="mobile-winrate">{winRate}%</span>
+                                                    {activeTab === 'season' && profile.weeklyWins > 0 && (
+                                                        <span className="mobile-weekly-wins">
+                                                            <Crown size={10} />
+                                                            {profile.weeklyWins}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
