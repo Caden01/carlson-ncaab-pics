@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, Lock, CheckCircle, XCircle, ChevronLeft, ChevronRight, Calendar, Users, ShieldAlert } from 'lucide-react';
@@ -22,6 +22,12 @@ export default function Dashboard() {
         return localDate.toISOString().split('T')[0];
     };
     const [selectedDate, setSelectedDate] = useState(getLocalDate());
+
+    // Track games in a ref for the polling interval (avoids stale closure issues)
+    const gamesRef = useRef(games);
+    useEffect(() => {
+        gamesRef.current = games;
+    }, [games]);
 
     useEffect(() => {
         if (user) {
@@ -52,7 +58,8 @@ export default function Dashboard() {
         // Polling for live scores (Distributed Worker Pattern)
         // Only poll if there are active games on the selected date
         const interval = setInterval(async () => {
-            const hasActiveGames = games.some(g => g.status === 'in_progress');
+            const currentGames = gamesRef.current;
+            const hasActiveGames = currentGames.some(g => g.status === 'in_progress');
             if (hasActiveGames && selectedDate === new Date().toISOString().split('T')[0]) {
                 await syncLiveScores();
             }
@@ -62,7 +69,7 @@ export default function Dashboard() {
             supabase.removeChannel(subscription);
             clearInterval(interval);
         };
-    }, [user, selectedDate, games.length]); // Re-run if games length changes to update polling logic
+    }, [user, selectedDate]); // Removed games.length - it was causing an infinite loop!
 
     const fetchGamesAndPicks = async () => {
         try {
