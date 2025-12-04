@@ -18,6 +18,7 @@ import {
     Crown,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Zap
 } from 'lucide-react-native';
 
@@ -35,6 +36,7 @@ export default function LeaderboardScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState('week');
     const [selectedDate, setSelectedDate] = useState(getLocalDate());
+    const [showWeeklyChampions, setShowWeeklyChampions] = useState(false);
 
     const getWeekStart = (date = new Date()) => {
         const d = new Date(date);
@@ -353,17 +355,28 @@ export default function LeaderboardScreen() {
                     </View>
                 )}
 
-                {/* Weekly Winners */}
-                {weeklyWinners.length > 0 && (
+                {/* Weekly Winners - Only show on Season tab */}
+                {activeTab === 'season' && weeklyWinners.length > 0 && (
                     <View style={styles.winnersSection}>
-                        <View style={styles.winnersHeader}>
-                            <Crown size={18} color="#fbbf24" />
-                            <Text style={styles.winnersTitle}>Weekly Champions</Text>
-                        </View>
-                        {weeklyWinners.slice(0, 3).map((winner, idx) => (
+                        <TouchableOpacity 
+                            style={styles.winnersHeader}
+                            onPress={() => setShowWeeklyChampions(!showWeeklyChampions)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.winnersHeaderLeft}>
+                                <Crown size={18} color="#fbbf24" />
+                                <Text style={styles.winnersTitle}>Weekly Champions</Text>
+                            </View>
+                            <ChevronDown 
+                                size={20} 
+                                color="#94a3b8" 
+                                style={{ transform: [{ rotate: showWeeklyChampions ? '180deg' : '0deg' }] }}
+                            />
+                        </TouchableOpacity>
+                        {showWeeklyChampions && weeklyWinners.map((winner, idx) => (
                             <View key={winner.id} style={styles.winnerItem}>
                                 <Text style={styles.winnerWeek}>
-                                    {formatDisplayDate(winner.week_start)} - {formatDisplayDate(winner.week_end)}
+                                    Week {weeklyWinners.length - idx}: {formatDisplayDate(winner.week_start)} - {formatDisplayDate(winner.week_end)}
                                 </Text>
                                 <View style={styles.winnerInfo}>
                                     <Avatar 
@@ -516,8 +529,13 @@ const styles = StyleSheet.create({
     winnersHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: spacing.md,
+    },
+    winnersHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: spacing.sm,
-        marginBottom: spacing.md,
     },
     winnersTitle: {
         fontSize: fontSize.md,

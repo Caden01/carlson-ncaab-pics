@@ -211,7 +211,7 @@ export default function Dashboard() {
 
         setPicks(prev => {
             const gamePicks = prev[gameId] ? [...prev[gameId]] : [];
-            const existingPickIndex = gamePicks.findIndex(p => p.user_id === user.id);
+            const existingPickIndex = gamePicks.findIndex(p => p.user_id === actingUser.id);
 
             const newPickObj = {
                 game_id: gameId,

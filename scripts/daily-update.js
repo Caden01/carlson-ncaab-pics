@@ -82,6 +82,8 @@ async function syncActiveGames() {
         const uniqueDates = [...new Set(activeGames.map(g => g.start_time.split('T')[0].replace(/-/g, '')))];
 
         let updatedCount = 0;
+        let removedCount = 0;
+
         for (const date of uniqueDates) {
             console.log(`Fetching games for date: ${date}`);
             const espnGames = await fetchDailyGames(date);
@@ -89,6 +91,24 @@ async function syncActiveGames() {
             for (const espnGame of espnGames) {
                 const dbGame = activeGames.find(g => g.external_id === espnGame.external_id);
                 if (dbGame) {
+                    // Check if spread was previously missing but now exists and is > 12
+                    // If so, remove the game (only if it has no picks)
+                    if (!dbGame.spread && espnGame.spread_value && Math.abs(espnGame.spread_value) > 12) {
+                        // Check if game has picks
+                        const { data: picks } = await supabase
+                            .from('picks')
+                            .select('id')
+                            .eq('game_id', dbGame.id)
+                            .limit(1);
+
+                        if (!picks || picks.length === 0) {
+                            console.log(`Removing ${espnGame.team_a} vs ${espnGame.team_b}: spread ${espnGame.spread_value} > 12`);
+                            await supabase.from('games').delete().eq('id', dbGame.id);
+                            removedCount++;
+                            continue;
+                        }
+                    }
+
                     // Update if status, score, spread, or details changed
                     if (dbGame.status !== (espnGame.status === 'post' ? 'finished' : 'in_progress') ||
                         dbGame.result_a !== espnGame.result_a ||
@@ -122,7 +142,7 @@ async function syncActiveGames() {
                 }
             }
         }
-        console.log(`Synced ${updatedCount} games.`);
+        console.log(`Synced ${updatedCount} games, removed ${removedCount} games (spread > 12).`);
     } catch (error) {
         console.error('Error syncing games:', error);
     }
@@ -146,20 +166,32 @@ async function importTodaysGames() {
         }
 
         let importedCount = 0;
-        for (const game of games) {
-            // Filter: Only import games with spread <= 12. Skip if no spread.
-            if (!game.spread_value || Math.abs(game.spread_value) > 12) {
-                console.log(`Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12 or missing`);
-                continue;
-            }
+        let skippedSpread = 0;
+        let skippedConference = 0;
+        let pendingSpread = 0;
 
+        for (const game of games) {
             // Filter: Must include at least one team from major conferences
             // Convert to strings since ESPN API returns conference IDs as numbers
             const teamAConf = String(game.team_a_conf_id);
             const teamBConf = String(game.team_b_conf_id);
             if (!MAJOR_CONFERENCES.includes(teamAConf) && !MAJOR_CONFERENCES.includes(teamBConf)) {
                 console.log(`Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`);
+                skippedConference++;
                 continue;
+            }
+
+            // Filter: If spread exists, only import games with spread <= 12
+            // If no spread yet, import anyway - spread will be updated by syncActiveGames later
+            if (game.spread_value && Math.abs(game.spread_value) > 12) {
+                console.log(`Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`);
+                skippedSpread++;
+                continue;
+            }
+
+            if (!game.spread_value) {
+                console.log(`${game.team_a} vs ${game.team_b}: No spread yet - will import and update later`);
+                pendingSpread++;
             }
 
             // Check if game exists
@@ -191,7 +223,11 @@ async function importTodaysGames() {
                 else console.error('Error inserting game:', error);
             }
         }
-        console.log(`Imported ${importedCount} new games.`);
+        console.log(`\n=== Import Summary ===`);
+        console.log(`Imported: ${importedCount} new games`);
+        console.log(`Pending spread: ${pendingSpread} games (will update later)`);
+        console.log(`Skipped (spread > 12): ${skippedSpread}`);
+        console.log(`Skipped (conference): ${skippedConference}`);
     } catch (error) {
         console.error('Error importing games:', error);
     }

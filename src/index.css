@@ -1294,16 +1294,46 @@ body {
 .weekly-winners-section {
   background: rgba(15, 23, 42, 0.5);
   border-radius: 1rem;
-  padding: 1.25rem;
+  padding: 1rem 1.25rem;
   margin-bottom: 1.5rem;
   border: 1px solid rgba(234, 179, 8, 0.2);
+  transition: all 0.2s ease;
+}
+
+.weekly-winners-section.collapsed {
+  padding: 0;
+}
+
+.weekly-winners-section.collapsed .weekly-winners-header {
+  padding: 1rem 1.25rem;
 }
 
 .weekly-winners-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0;
+  transition: opacity 0.2s;
+}
+
+.weekly-winners-header:hover {
+  opacity: 0.8;
+}
+
+.weekly-winners-section.expanded .weekly-winners-header {
   margin-bottom: 1rem;
+}
+
+.weekly-winners-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .weekly-winners-header h2 {
@@ -1311,6 +1341,15 @@ body {
   font-weight: 700;
   color: #fbbf24;
   margin: 0;
+}
+
+.chevron-icon {
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(180deg);
 }
 
 .weekly-winners-list {

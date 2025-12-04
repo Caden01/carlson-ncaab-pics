@@ -17,18 +17,19 @@ export const importGamesForDate = async (dateStr) => {
         const MAJOR_CONFERENCES = ['2', '4', '7', '8', '23'];
 
         for (const game of games) {
-            // Filter: Only import games with spread <= 12. Skip if no spread.
-            if (!game.spread_value || Math.abs(game.spread_value) > 12) {
-                console.log(`Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12 or missing`);
-                continue;
-            }
-
             // Filter: Must include at least one team from major conferences
             const teamAConf = String(game.team_a_conf_id);
             const teamBConf = String(game.team_b_conf_id);
 
             if (!MAJOR_CONFERENCES.includes(teamAConf) && !MAJOR_CONFERENCES.includes(teamBConf)) {
                 console.log(`Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`);
+                continue;
+            }
+
+            // Filter: If spread exists, only import games with spread <= 12
+            // If no spread yet, import anyway - spread will be updated later
+            if (game.spread_value && Math.abs(game.spread_value) > 12) {
+                console.log(`Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`);
                 continue;
             }
 

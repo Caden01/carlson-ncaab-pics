@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Trophy, Medal, Zap, Flame, Calendar, CalendarDays, Crown, Award, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trophy, Medal, Zap, Flame, Calendar, CalendarDays, Crown, Award, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { getAvatarGradient } from '../lib/utils';
 import { didTeamCover } from '../lib/gameLogic';
 
@@ -10,6 +10,7 @@ export default function Leaderboard() {
     const [weeklyWinners, setWeeklyWinners] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('week'); // 'daily', 'week', 'season'
+    const [showWeeklyChampions, setShowWeeklyChampions] = useState(false);
     
     // Format date as YYYY-MM-DD in local timezone
     const formatLocalDate = (date) => {
@@ -296,34 +297,45 @@ export default function Leaderboard() {
                     </div>
                 )}
 
-                {/* Weekly Winners Section */}
-                {weeklyWinners.length > 0 && (
-                    <div className="weekly-winners-section">
-                        <div className="weekly-winners-header">
-                            <Crown size={20} className="text-yellow-400" />
-                            <h2>Weekly Champions</h2>
-                        </div>
-                        <div className="weekly-winners-list">
-                            {weeklyWinners.slice(0, 5).map((winner, idx) => (
-                                <div key={winner.id} className="weekly-winner-item">
-                                    <div className="winner-week">
-                                        {new Date(winner.week_start + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                        {' - '}
-                                        {new Date(winner.week_end + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                    </div>
-                                    <div className="winner-info">
-                                        <div
-                                            className="winner-avatar"
-                                            style={{ background: getAvatarGradient(winner.profiles?.username || winner.profiles?.email || 'U') }}
-                                        >
-                                            {(winner.profiles?.username || winner.profiles?.email || 'U').charAt(0).toUpperCase()}
+                {/* Weekly Winners Section - Only show on Season tab */}
+                {activeTab === 'season' && weeklyWinners.length > 0 && (
+                    <div className={`weekly-winners-section ${showWeeklyChampions ? 'expanded' : 'collapsed'}`}>
+                        <button 
+                            className="weekly-winners-header"
+                            onClick={() => setShowWeeklyChampions(!showWeeklyChampions)}
+                        >
+                            <div className="weekly-winners-title">
+                                <Crown size={20} className="text-yellow-400" />
+                                <h2>Weekly Champions</h2>
+                            </div>
+                            <ChevronDown 
+                                size={20} 
+                                className={`chevron-icon ${showWeeklyChampions ? 'rotated' : ''}`} 
+                            />
+                        </button>
+                        {showWeeklyChampions && (
+                            <div className="weekly-winners-list">
+                                {weeklyWinners.map((winner, idx) => (
+                                    <div key={winner.id} className="weekly-winner-item">
+                                        <div className="winner-week">
+                                            Week {weeklyWinners.length - idx}: {new Date(winner.week_start + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                            {' - '}
+                                            {new Date(winner.week_end + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                         </div>
-                                        <span className="winner-name">{winner.profiles?.username || winner.profiles?.email}</span>
-                                        <span className="winner-record">{winner.wins}-{winner.losses}</span>
+                                        <div className="winner-info">
+                                            <div
+                                                className="winner-avatar"
+                                                style={{ background: getAvatarGradient(winner.profiles?.username || winner.profiles?.email || 'U') }}
+                                            >
+                                                {(winner.profiles?.username || winner.profiles?.email || 'U').charAt(0).toUpperCase()}
+                                            </div>
+                                            <span className="winner-name">{winner.profiles?.username || winner.profiles?.email}</span>
+                                            <span className="winner-record">{winner.wins}-{winner.losses}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
