@@ -34,8 +34,8 @@ export const importGamesForDate = async (dateStr) => {
       // Filter: Skip games without a valid spread
       // Check if spread is null, undefined, or set to "off"
       if (
-        !game.spread_value ||
         game.spread_value === null ||
+        game.spread_value === undefined ||
         !game.spread ||
         game.spread === null ||
         (typeof game.spread === "string" &&

@@ -50,7 +50,11 @@ export default function AdminScreen() {
       const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
 
       for (const game of games) {
-        if (!game.spread_value || Math.abs(game.spread_value) > 12) {
+        if (
+          game.spread_value === null ||
+          game.spread_value === undefined ||
+          Math.abs(game.spread_value) > 12
+        ) {
           continue;
         }
 

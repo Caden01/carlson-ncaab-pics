@@ -112,7 +112,10 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
     const [espnResponse, oddsResponse] = await Promise.all([
       fetch(
         `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}&groups=50&limit=1000`
-      ).then((r) => r.json()),
+      ).then((r) => {
+        if (!r.ok) throw new Error(`ESPN API error: ${r.status}`);
+        return r.json();
+      }),
       fetch(
         `https://api.the-odds-api.com/v4/sports/basketball_ncaab/odds/?regions=us&markets=spreads&dateFormat=iso&commenceTimeFrom=${isoDate}&commenceTimeTo=${year}-${month}-${day}T23:59:59Z&apiKey=${oddsApiKey}`
       ).then((r) => {

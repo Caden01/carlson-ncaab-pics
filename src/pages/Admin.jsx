@@ -29,7 +29,11 @@ export default function Admin() {
       let importedCount = 0;
       for (const game of games) {
         // Filter: Only import games with spread <= 12. Skip if no spread.
-        if (!game.spread_value || Math.abs(game.spread_value) > 12) {
+        if (
+          game.spread_value === null ||
+          game.spread_value === undefined ||
+          Math.abs(game.spread_value) > 12
+        ) {
           continue;
         }
 
