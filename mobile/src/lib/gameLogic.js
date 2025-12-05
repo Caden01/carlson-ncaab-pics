@@ -5,33 +5,36 @@
  * @returns {boolean|null} - True if covered, false if not, null if game not finished or invalid spread.
  */
 export const didTeamCover = (game, teamName) => {
-    if (game.status !== 'finished' && game.status !== 'post') return null;
-    if (!game.spread || !game.spread.includes(' ')) return null;
+  if (game.status !== "finished" && game.status !== "post") return null;
+  if (!game.spread || !game.spread.includes(" ")) return null;
 
-    // Parse spread string (e.g., "KAN -5.5")
-    const parts = game.spread.split(' ');
-    const spreadTeamAbbrev = parts[0];
-    const spreadValue = parseFloat(parts[1]);
+  // Parse spread string (e.g., "KAN -5.5")
+  const parts = game.spread.split(" ");
+  const spreadTeamAbbrev = parts[0];
+  const spreadValue = parseFloat(parts[1]);
 
-    if (isNaN(spreadValue)) return null;
+  if (isNaN(spreadValue)) return null;
 
-    // Determine which team is the "spread team" (the one associated with the abbreviation)
-    let isSpreadTeam = false;
-    if (game.team_a_abbrev === spreadTeamAbbrev) {
-        if (teamName === game.team_a) isSpreadTeam = true;
-    } else if (game.team_b_abbrev === spreadTeamAbbrev) {
-        if (teamName === game.team_b) isSpreadTeam = true;
-    } else {
-        return null;
-    }
+  // Determine which team is the "spread team" (the one associated with the abbreviation)
+  let isSpreadTeam = false;
+  if (game.team_a_abbrev === spreadTeamAbbrev) {
+    if (teamName === game.team_a) isSpreadTeam = true;
+  } else if (game.team_b_abbrev === spreadTeamAbbrev) {
+    if (teamName === game.team_b) isSpreadTeam = true;
+  } else {
+    return null;
+  }
 
-    // Calculate margin from the perspective of the team we are checking
-    const margin = teamName === game.team_a
-        ? game.result_a - game.result_b
-        : game.result_b - game.result_a;
+  // Calculate margin from the perspective of the team we are checking
+  // Ensure scores are valid numbers
+  if (game.result_a == null || game.result_b == null) return null;
 
-    const effectiveSpread = isSpreadTeam ? spreadValue : -spreadValue;
+  const margin =
+    teamName === game.team_a
+      ? game.result_a - game.result_b
+      : game.result_b - game.result_a;
 
-    return (margin + effectiveSpread) > 0;
+  const effectiveSpread = isSpreadTeam ? spreadValue : -spreadValue;
+
+  return margin + effectiveSpread > 0;
 };
-
