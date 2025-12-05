@@ -2,9 +2,10 @@ name: Daily Game Update
 
 on:
   schedule:
-    # Runs at 14:00 UTC daily, which is 6:00 AM PST (Standard Time) or 7:00 AM PDT (Daylight Time)
-    # 6:00 AM PST = 14:00 UTC
-    - cron: '0 14 * * *'
+    # Weekdays (Mon-Fri): Runs at 22:00 UTC, which is 2:00 PM PST (Standard Time) or 3:00 PM PDT (Daylight Time)
+    - cron: "0 22 * * 1-5"
+    # Weekends (Sat-Sun): Runs at 15:00 UTC, which is 7:00 AM PST (Standard Time) or 8:00 AM PDT (Daylight Time)
+    - cron: "0 15 * * 0,6"
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Install dependencies
         run: npm install
@@ -27,4 +28,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: node scripts/daily-update.js

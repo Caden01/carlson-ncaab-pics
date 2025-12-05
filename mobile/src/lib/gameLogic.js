@@ -10,6 +10,9 @@ export const didTeamCover = (game, teamName) => {
 
   // Parse spread string (e.g., "KAN -5.5")
   const parts = game.spread.split(" ");
+  // Ensure we have at least 2 parts (team abbreviation and spread value)
+  if (parts.length < 2) return null;
+
   const spreadTeamAbbrev = parts[0];
   const spreadValue = parseFloat(parts[1]);
 

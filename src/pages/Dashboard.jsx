@@ -233,7 +233,14 @@ export default function Dashboard() {
               updates.spread = espnGame.spread;
             }
 
-            await supabase.from("games").update(updates).eq("id", dbGame.id);
+            const { error: updateError } = await supabase
+              .from("games")
+              .update(updates)
+              .eq("id", dbGame.id);
+
+            if (updateError) {
+              console.error("Error updating game:", dbGame.id, updateError);
+            }
           }
         }
       }
@@ -408,7 +415,11 @@ export default function Dashboard() {
                   <div className="teams">
                     <div
                       className={`team-container ${
-                        game.result_a > game.result_b ? "winner" : ""
+                        game.result_a !== null &&
+                        game.result_b !== null &&
+                        game.result_a > game.result_b
+                          ? "winner"
+                          : ""
                       }`}
                     >
                       <div className="team-details">
@@ -426,7 +437,11 @@ export default function Dashboard() {
                     <span className="vs">vs</span>
                     <div
                       className={`team-container ${
-                        game.result_b > game.result_a ? "winner" : ""
+                        game.result_a !== null &&
+                        game.result_b !== null &&
+                        game.result_b > game.result_a
+                          ? "winner"
+                          : ""
                       }`}
                     >
                       <div className="team-details">
@@ -448,21 +463,25 @@ export default function Dashboard() {
                         <span className="text-red-500 font-bold animate-pulse">
                           LIVE
                         </span>
-                      ) : (
+                      ) : game.start_time ? (
                         new Date(game.start_time).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
                         })
+                      ) : (
+                        "TBD"
                       )}
                     </span>
                     {game.spread && (
                       <span className="game-spread">{game.spread}</span>
                     )}
-                    {game.status !== "scheduled" && (
-                      <span className="game-score">
-                        {game.result_a} - {game.result_b}
-                      </span>
-                    )}
+                    {game.status !== "scheduled" &&
+                      game.result_a !== null &&
+                      game.result_b !== null && (
+                        <span className="game-score">
+                          {game.result_a} - {game.result_b}
+                        </span>
+                      )}
                   </div>
                 </div>
                 <div className="teams-container">
