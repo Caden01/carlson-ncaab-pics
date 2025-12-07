@@ -330,7 +330,7 @@ export default function Leaderboard() {
           .from("weekly_winners")
           .select("user_id, wins, losses")
           .eq("week_start", weekStart)
-          .single();
+          .maybeSingle();
 
         if (winnerData) {
           // Show all players, with winner having their record, others showing N/A

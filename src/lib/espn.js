@@ -46,8 +46,222 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
         let spread = null;
         let spread_value = null;
         if (competition.odds && competition.odds.length > 0) {
-          spread = competition.odds[0].details;
-          spread_value = competition.odds[0].spread;
+          // Look through all odds entries to find the favorite's spread (negative value)
+          // ESPN often provides multiple odds entries - one for favorite, one for underdog
+          const favoriteOdds = competition.odds.find((odds) => odds.spread < 0);
+
+          if (favoriteOdds) {
+            // Found favorite spread directly - validate team and use it
+            const spreadDetails = favoriteOdds.details || "";
+            const parts = spreadDetails.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              const spreadTeamIdentifier = parts[0].toUpperCase().trim();
+              const awayAbbrev = (awayTeam.team.abbreviation || "")
+                .toUpperCase()
+                .trim();
+              const homeAbbrev = (homeTeam.team.abbreviation || "")
+                .toUpperCase()
+                .trim();
+              const awayName = (awayTeam.team.displayName || "").toUpperCase();
+              const homeName = (homeTeam.team.displayName || "").toUpperCase();
+
+              spread_value = favoriteOdds.spread;
+
+              // Determine which team is the favorite by matching the spread details
+              let favoriteAbbrev = null;
+              if (
+                spreadTeamIdentifier === awayAbbrev ||
+                (awayAbbrev &&
+                  spreadDetails.toUpperCase().includes(awayAbbrev)) ||
+                awayName.includes(spreadTeamIdentifier)
+              ) {
+                favoriteAbbrev = awayTeam.team.abbreviation;
+              } else if (
+                spreadTeamIdentifier === homeAbbrev ||
+                (homeAbbrev &&
+                  spreadDetails.toUpperCase().includes(homeAbbrev)) ||
+                homeName.includes(spreadTeamIdentifier)
+              ) {
+                favoriteAbbrev = homeTeam.team.abbreviation;
+              } else {
+                // Can't match team - use original but this might be wrong
+                // Try to infer: check if we can match by partial name
+                const spreadUpper = spreadDetails.toUpperCase();
+                if (
+                  spreadUpper.includes(awayName.split(" ")[0]) ||
+                  awayName.includes(spreadTeamIdentifier)
+                ) {
+                  favoriteAbbrev = awayTeam.team.abbreviation;
+                } else if (
+                  spreadUpper.includes(homeName.split(" ")[0]) ||
+                  homeName.includes(spreadTeamIdentifier)
+                ) {
+                  favoriteAbbrev = homeTeam.team.abbreviation;
+                } else {
+                  // Can't determine - use original (might be incorrect)
+                  spread = favoriteOdds.details;
+                }
+              }
+
+              if (favoriteAbbrev) {
+                // Reconstruct spread string with correct team abbreviation
+                spread = `${favoriteAbbrev} ${spread_value}`;
+              }
+            } else {
+              // Invalid format, skip
+              spread = null;
+              spread_value = null;
+            }
+          } else {
+            // No favorite spread found, try to convert from underdog spread
+            // Only use the first underdog entry if we can't find a favorite
+            const underdogOdds = competition.odds.find(
+              (odds) => odds.spread > 0
+            );
+            if (underdogOdds) {
+              // Underdog spread (positive) - but check details string first
+              // ESPN sometimes has details like "TTU -5.5" even when spread is positive
+              const spreadDetails = underdogOdds.details || "";
+              const parts = spreadDetails.trim().split(/\s+/);
+
+              // Check if details string contains a negative spread (e.g., "TTU -5.5")
+              // This means the team in details is actually the favorite
+              if (parts.length >= 2) {
+                const detailsSpreadValue = parseFloat(parts[parts.length - 1]);
+                if (detailsSpreadValue < 0) {
+                  // Details show negative spread, so the team in details is the favorite
+                  const favoriteIdentifier = parts
+                    .slice(0, -1)
+                    .join(" ")
+                    .toUpperCase()
+                    .trim();
+                  const awayAbbrev = (awayTeam.team.abbreviation || "")
+                    .toUpperCase()
+                    .trim();
+                  const homeAbbrev = (homeTeam.team.abbreviation || "")
+                    .toUpperCase()
+                    .trim();
+                  const awayName = (
+                    awayTeam.team.displayName || ""
+                  ).toUpperCase();
+                  const homeName = (
+                    homeTeam.team.displayName || ""
+                  ).toUpperCase();
+                  const spreadUpper = spreadDetails.toUpperCase();
+
+                  // Match the favorite team from details
+                  let favoriteAbbrev = null;
+                  if (
+                    favoriteIdentifier === awayAbbrev ||
+                    (awayAbbrev && spreadUpper.includes(awayAbbrev)) ||
+                    awayName.includes(favoriteIdentifier)
+                  ) {
+                    favoriteAbbrev = awayTeam.team.abbreviation;
+                  } else if (
+                    favoriteIdentifier === homeAbbrev ||
+                    (homeAbbrev && spreadUpper.includes(homeAbbrev)) ||
+                    homeName.includes(favoriteIdentifier)
+                  ) {
+                    favoriteAbbrev = homeTeam.team.abbreviation;
+                  } else {
+                    // Try fuzzy matching
+                    const awayFirstWord = awayName.split(" ")[0];
+                    const homeFirstWord = homeName.split(" ")[0];
+                    if (
+                      spreadUpper.includes(awayFirstWord) &&
+                      awayFirstWord.length > 2
+                    ) {
+                      favoriteAbbrev = awayTeam.team.abbreviation;
+                    } else if (
+                      spreadUpper.includes(homeFirstWord) &&
+                      homeFirstWord.length > 2
+                    ) {
+                      favoriteAbbrev = homeTeam.team.abbreviation;
+                    }
+                  }
+
+                  if (favoriteAbbrev) {
+                    spread_value = detailsSpreadValue;
+                    spread = `${favoriteAbbrev} ${spread_value}`;
+                  }
+                } else {
+                  // Details show positive spread, so team in details is underdog
+                  // Convert to favorite spread
+                  const underdogIdentifier = parts[0].toUpperCase().trim();
+                  const awayAbbrev = (awayTeam.team.abbreviation || "")
+                    .toUpperCase()
+                    .trim();
+                  const homeAbbrev = (homeTeam.team.abbreviation || "")
+                    .toUpperCase()
+                    .trim();
+                  const awayName = (
+                    awayTeam.team.displayName || ""
+                  ).toUpperCase();
+                  const homeName = (
+                    homeTeam.team.displayName || ""
+                  ).toUpperCase();
+                  const spreadUpper = spreadDetails.toUpperCase();
+
+                  // Determine which team is the underdog by checking multiple ways
+                  let isAwayUnderdog = false;
+                  let isHomeUnderdog = false;
+
+                  // Method 1: Direct abbreviation match
+                  if (awayAbbrev && awayAbbrev === underdogIdentifier) {
+                    isAwayUnderdog = true;
+                  } else if (homeAbbrev && homeAbbrev === underdogIdentifier) {
+                    isHomeUnderdog = true;
+                  }
+                  // Method 2: Check if spread string contains team abbreviation
+                  else if (awayAbbrev && spreadUpper.includes(awayAbbrev)) {
+                    isAwayUnderdog = true;
+                  } else if (homeAbbrev && spreadUpper.includes(homeAbbrev)) {
+                    isHomeUnderdog = true;
+                  }
+                  // Method 3: Check if spread string contains first word of team name
+                  else {
+                    const awayFirstWord = awayName.split(" ")[0];
+                    const homeFirstWord = homeName.split(" ")[0];
+                    if (
+                      spreadUpper.includes(awayFirstWord) &&
+                      awayFirstWord.length > 2
+                    ) {
+                      isAwayUnderdog = true;
+                    } else if (
+                      spreadUpper.includes(homeFirstWord) &&
+                      homeFirstWord.length > 2
+                    ) {
+                      isHomeUnderdog = true;
+                    }
+                    // Method 4: Check if identifier is contained in team name
+                    else if (
+                      awayName.includes(underdogIdentifier) &&
+                      underdogIdentifier.length > 1
+                    ) {
+                      isAwayUnderdog = true;
+                    } else if (
+                      homeName.includes(underdogIdentifier) &&
+                      underdogIdentifier.length > 1
+                    ) {
+                      isHomeUnderdog = true;
+                    }
+                  }
+
+                  // If we identified the underdog, create favorite spread
+                  if (isAwayUnderdog) {
+                    // Away team is underdog, so home team is favorite
+                    spread_value = -Math.abs(underdogOdds.spread);
+                    spread = `${homeTeam.team.abbreviation} ${spread_value}`;
+                  } else if (isHomeUnderdog) {
+                    // Home team is underdog, so away team is favorite
+                    spread_value = -Math.abs(underdogOdds.spread);
+                    spread = `${awayTeam.team.abbreviation} ${spread_value}`;
+                  }
+                  // If we can't determine, leave spread as null (better than wrong spread)
+                }
+              }
+            }
+          }
         }
 
         const getRecord = (team) => {
@@ -57,7 +271,7 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
 
         const getRank = (team) => {
           return team?.curatedRank?.current <= 25
-            ? team.curatedRank.current
+            ? team?.curatedRank?.current
             : null;
         };
 
@@ -147,17 +361,35 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
         }
 
         if (spreads.length > 0) {
-          // Find consensus spread (most common point value)
+          // Find consensus spread (most common absolute point value)
+          // Group by absolute value since favorite has -X and underdog has +X for same game
           const spreadCounts = {};
           spreads.forEach((s) => {
-            const key = `${s.point}`;
+            const absPoint = Math.abs(s.point);
+            const key = `${absPoint}`;
             if (!spreadCounts[key]) {
-              spreadCounts[key] = { point: s.point, teams: [], count: 0 };
+              spreadCounts[key] = {
+                absPoint: absPoint,
+                favoritePoint: null,
+                underdogPoint: null,
+                favoriteTeams: [],
+                underdogTeams: [],
+                count: 0,
+              };
             }
-            spreadCounts[key].teams.push(s.team);
+            if (s.point < 0) {
+              // Favorite (negative spread)
+              spreadCounts[key].favoritePoint = s.point;
+              spreadCounts[key].favoriteTeams.push(s.team);
+            } else {
+              // Underdog (positive spread)
+              spreadCounts[key].underdogPoint = s.point;
+              spreadCounts[key].underdogTeams.push(s.team);
+            }
             spreadCounts[key].count++;
           });
 
+          // Find the most common absolute spread value
           let maxCount = 0;
           let consensusSpread = null;
           for (const [key, value] of Object.entries(spreadCounts)) {
@@ -167,32 +399,86 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
             }
           }
 
-          if (consensusSpread) {
-            const favoriteTeam = consensusSpread.teams.find((team) =>
-              [game.home_team, game.away_team].includes(team)
-            );
-            const spreadTeam = favoriteTeam || consensusSpread.teams[0];
-            const spread = `${spreadTeam} ${
-              consensusSpread.point > 0 ? "+" : ""
-            }${consensusSpread.point}`;
-
-            // Create keys for matching (normalize team names)
+          if (consensusSpread && consensusSpread.favoritePoint !== null) {
+            // Only show the favorite's spread (negative value)
+            const spreadPoint = consensusSpread.favoritePoint;
+            // Find which team is the favorite (normalize names for matching)
             const normalizeName = (name) =>
               name.toLowerCase().replace(/\s+/g, " ").trim();
-            const key1 = `${normalizeName(game.away_team)}|${normalizeName(
-              game.home_team
-            )}`;
-            const key2 = `${normalizeName(game.home_team)}|${normalizeName(
-              game.away_team
-            )}`;
+            const awayNormalized = normalizeName(game.away_team);
+            const homeNormalized = normalizeName(game.home_team);
 
+            // Find the favorite team name from Odds API - try to match to away or home
+            let favoriteTeamName = null;
+            let isAwayFavorite = false;
+            let isHomeFavorite = false;
+
+            // Try to find which team is the favorite by matching favorite team names
+            for (const favoriteTeam of consensusSpread.favoriteTeams) {
+              const favoriteNormalized = normalizeName(favoriteTeam);
+
+              // Check if this favorite team matches the away team
+              if (
+                favoriteNormalized === awayNormalized ||
+                awayNormalized.includes(favoriteNormalized) ||
+                favoriteNormalized.includes(awayNormalized)
+              ) {
+                favoriteTeamName = game.away_team;
+                isAwayFavorite = true;
+                break;
+              }
+              // Check if this favorite team matches the home team
+              if (
+                favoriteNormalized === homeNormalized ||
+                homeNormalized.includes(favoriteNormalized) ||
+                favoriteNormalized.includes(homeNormalized)
+              ) {
+                favoriteTeamName = game.home_team;
+                isHomeFavorite = true;
+                break;
+              }
+            }
+
+            // If we couldn't match, use the first favorite team name and try to infer
+            if (!favoriteTeamName && consensusSpread.favoriteTeams.length > 0) {
+              favoriteTeamName = consensusSpread.favoriteTeams[0];
+              const favoriteNormalized = normalizeName(favoriteTeamName);
+              // Try fuzzy matching
+              if (
+                favoriteNormalized === awayNormalized ||
+                awayNormalized.includes(favoriteNormalized) ||
+                favoriteNormalized.includes(awayNormalized)
+              ) {
+                isAwayFavorite = true;
+              } else if (
+                favoriteNormalized === homeNormalized ||
+                homeNormalized.includes(favoriteNormalized) ||
+                favoriteNormalized.includes(homeNormalized)
+              ) {
+                isHomeFavorite = true;
+              }
+            }
+
+            // Create keys for matching (normalize team names)
+            const key1 = `${awayNormalized}|${homeNormalized}`;
+            const key2 = `${homeNormalized}|${awayNormalized}`;
+
+            // Store which team is favorite along with Odds API team names for better matching
             oddsMap.set(key1, {
-              spread,
-              spread_value: consensusSpread.point,
+              spread_value: spreadPoint,
+              favoriteTeamName: favoriteTeamName,
+              isAwayFavorite: isAwayFavorite,
+              isHomeFavorite: isHomeFavorite,
+              oddsAwayTeam: game.away_team,
+              oddsHomeTeam: game.home_team,
             });
             oddsMap.set(key2, {
-              spread,
-              spread_value: consensusSpread.point,
+              spread_value: spreadPoint,
+              favoriteTeamName: favoriteTeamName,
+              isAwayFavorite: isAwayFavorite,
+              isHomeFavorite: isHomeFavorite,
+              oddsAwayTeam: game.away_team,
+              oddsHomeTeam: game.home_team,
             });
           }
         }
@@ -229,11 +515,94 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
         let spread_value = null;
 
         if (oddsData && oddsData.spread_value !== null) {
-          spread = oddsData.spread;
           spread_value = oddsData.spread_value;
+          // Determine which ESPN team is the favorite and use their abbreviation
+          const espnAwayNormalized = normalizeName(awayTeam.team.displayName);
+          const espnHomeNormalized = normalizeName(homeTeam.team.displayName);
+          const oddsAwayNormalized = normalizeName(oddsData.oddsAwayTeam || "");
+          const oddsHomeNormalized = normalizeName(oddsData.oddsHomeTeam || "");
+          const favoriteNormalized = normalizeName(
+            oddsData.favoriteTeamName || ""
+          );
+
+          // First, try to match ESPN teams to Odds API teams to determine which ESPN team is the favorite
+          let espnFavoriteIsAway = false;
+          let espnFavoriteIsHome = false;
+
+          // If we have stored flags, use them but verify with team name matching
+          if (oddsData.isAwayFavorite) {
+            // Verify that the Odds API away team matches an ESPN team
+            if (
+              espnAwayNormalized === oddsAwayNormalized ||
+              espnAwayNormalized.includes(oddsAwayNormalized) ||
+              oddsAwayNormalized.includes(espnAwayNormalized)
+            ) {
+              espnFavoriteIsAway = true;
+            } else if (
+              espnHomeNormalized === oddsAwayNormalized ||
+              espnHomeNormalized.includes(oddsAwayNormalized) ||
+              oddsAwayNormalized.includes(espnHomeNormalized)
+            ) {
+              // Odds API away team actually matches ESPN home team
+              espnFavoriteIsHome = true;
+            }
+          } else if (oddsData.isHomeFavorite) {
+            // Verify that the Odds API home team matches an ESPN team
+            if (
+              espnHomeNormalized === oddsHomeNormalized ||
+              espnHomeNormalized.includes(oddsHomeNormalized) ||
+              oddsHomeNormalized.includes(espnHomeNormalized)
+            ) {
+              espnFavoriteIsHome = true;
+            } else if (
+              espnAwayNormalized === oddsHomeNormalized ||
+              espnAwayNormalized.includes(oddsHomeNormalized) ||
+              oddsHomeNormalized.includes(espnAwayNormalized)
+            ) {
+              // Odds API home team actually matches ESPN away team
+              espnFavoriteIsAway = true;
+            }
+          }
+
+          // If flags didn't work, try matching by favorite team name directly
+          if (
+            !espnFavoriteIsAway &&
+            !espnFavoriteIsHome &&
+            favoriteNormalized
+          ) {
+            if (
+              espnAwayNormalized === favoriteNormalized ||
+              espnAwayNormalized.includes(favoriteNormalized) ||
+              favoriteNormalized.includes(espnAwayNormalized)
+            ) {
+              espnFavoriteIsAway = true;
+            } else if (
+              espnHomeNormalized === favoriteNormalized ||
+              espnHomeNormalized.includes(favoriteNormalized) ||
+              favoriteNormalized.includes(espnHomeNormalized)
+            ) {
+              espnFavoriteIsHome = true;
+            }
+          }
+
+          // Set the spread using the correct ESPN team abbreviation
+          if (espnFavoriteIsAway && awayTeam.team.abbreviation) {
+            spread = `${awayTeam.team.abbreviation} ${spread_value}`;
+          } else if (espnFavoriteIsHome && homeTeam.team.abbreviation) {
+            spread = `${homeTeam.team.abbreviation} ${spread_value}`;
+          } else {
+            // Can't determine, skip this spread
+            spread = null;
+            spread_value = null;
+          }
         } else if (competition.odds && competition.odds.length > 0) {
-          spread = competition.odds[0].details;
-          spread_value = competition.odds[0].spread;
+          // Look for favorite's spread (negative value) in ESPN odds
+          const favoriteOdds = competition.odds.find((odds) => odds.spread < 0);
+          if (favoriteOdds) {
+            spread = favoriteOdds.details;
+            spread_value = favoriteOdds.spread;
+          }
+          // If no favorite spread found, skip (don't use underdog spread)
         }
 
         const getRecord = (team) => {
@@ -243,7 +612,7 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
 
         const getRank = (team) => {
           return team?.curatedRank?.current <= 25
-            ? team.curatedRank.current
+            ? team?.curatedRank?.current
             : null;
         };
 

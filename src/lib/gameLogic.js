@@ -9,12 +9,18 @@ export const didTeamCover = (game, teamName) => {
   if (!game.spread || !game.spread.includes(" ")) return null;
 
   // Parse spread string (e.g., "KAN -5.5")
-  const parts = game.spread.split(" ");
+  // Use regex to split on whitespace and filter out empty strings
+  // This handles cases with multiple spaces (e.g., "KAN  -5.5")
+  const parts = game.spread
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p.length > 0);
   // Ensure we have at least 2 parts (team abbreviation and spread value)
   if (parts.length < 2) return null;
 
   const spreadTeamAbbrev = parts[0];
-  const spreadValue = parseFloat(parts[1]);
+  // The spread value should be the last part (handles multi-word team names)
+  const spreadValue = parseFloat(parts[parts.length - 1]);
 
   if (isNaN(spreadValue)) return null;
 

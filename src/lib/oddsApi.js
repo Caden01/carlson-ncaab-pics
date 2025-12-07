@@ -68,18 +68,34 @@ export const fetchDailyGamesFromOddsApi = async (date, apiKey) => {
 
           // Use the most common spread (consensus)
           if (spreads.length > 0) {
-            // Group by point value and find most common
+            // Group by absolute value since favorite has -X and underdog has +X for same game
             const spreadCounts = {};
             spreads.forEach((s) => {
-              const key = `${s.point}`;
+              const absPoint = Math.abs(s.point);
+              const key = `${absPoint}`;
               if (!spreadCounts[key]) {
-                spreadCounts[key] = { point: s.point, teams: [], count: 0 };
+                spreadCounts[key] = {
+                  absPoint: absPoint,
+                  favoritePoint: null,
+                  underdogPoint: null,
+                  favoriteTeams: [],
+                  underdogTeams: [],
+                  count: 0,
+                };
               }
-              spreadCounts[key].teams.push(s.team);
+              if (s.point < 0) {
+                // Favorite (negative spread)
+                spreadCounts[key].favoritePoint = s.point;
+                spreadCounts[key].favoriteTeams.push(s.team);
+              } else {
+                // Underdog (positive spread)
+                spreadCounts[key].underdogPoint = s.point;
+                spreadCounts[key].underdogTeams.push(s.team);
+              }
               spreadCounts[key].count++;
             });
 
-            // Find the most common spread
+            // Find the most common absolute spread value
             let maxCount = 0;
             let consensusSpread = null;
             for (const [key, value] of Object.entries(spreadCounts)) {
@@ -89,17 +105,15 @@ export const fetchDailyGamesFromOddsApi = async (date, apiKey) => {
               }
             }
 
-            if (consensusSpread) {
-              spread_value = consensusSpread.point;
-              // Find which team has this spread (usually the favorite)
-              const favoriteTeam = consensusSpread.teams.find((team) =>
-                [game.home_team, game.away_team].includes(team)
-              );
-              spread_team = favoriteTeam || consensusSpread.teams[0];
-              // Format: "TEAM -X.X" or "TEAM +X.X"
-              spread = `${spread_team} ${
-                spread_value > 0 ? "+" : ""
-              }${spread_value}`;
+            if (consensusSpread && consensusSpread.favoritePoint !== null) {
+              // Only show the favorite's spread (negative value)
+              spread_value = consensusSpread.favoritePoint;
+              spread_team =
+                consensusSpread.favoriteTeams.find((team) =>
+                  [game.home_team, game.away_team].includes(team)
+                ) || consensusSpread.favoriteTeams[0];
+              // Format: "TEAM -X.X" (favorite's spread is always negative)
+              spread = `${spread_team} ${spread_value}`;
             }
           }
         }
@@ -157,8 +171,17 @@ export const fetchDailyGamesHybrid = async (date, oddsApiKey) => {
     const oddsMap = new Map();
     oddsGames.forEach((game) => {
       // Use both team names as key (handle different naming)
-      const key = `${game.team_a}|${game.team_b}`;
-      oddsMap.set(key, game);
+      // Normalize names for better matching
+      const normalizeName = (name) =>
+        name.toLowerCase().replace(/\s+/g, " ").trim();
+      const key1 = `${normalizeName(game.team_a)}|${normalizeName(
+        game.team_b
+      )}`;
+      const key2 = `${normalizeName(game.team_b)}|${normalizeName(
+        game.team_a
+      )}`;
+      oddsMap.set(key1, game);
+      oddsMap.set(key2, game);
     });
 
     // Merge ESPN data with Odds API spreads
@@ -178,8 +201,10 @@ export const fetchDailyGamesHybrid = async (date, oddsApiKey) => {
         if (!event.status?.type) return null;
 
         // Try to find matching game in Odds API
-        const espnAwayName = awayTeam.team.displayName;
-        const espnHomeName = homeTeam.team.displayName;
+        const normalizeName = (name) =>
+          name.toLowerCase().replace(/\s+/g, " ").trim();
+        const espnAwayName = normalizeName(awayTeam.team.displayName);
+        const espnHomeName = normalizeName(homeTeam.team.displayName);
 
         // Try multiple key formats
         let oddsGame =
@@ -189,9 +214,10 @@ export const fetchDailyGamesHybrid = async (date, oddsApiKey) => {
         // If no exact match, try fuzzy matching
         if (!oddsGame) {
           for (const [key, game] of oddsMap.entries()) {
+            const [keyAway, keyHome] = key.split("|");
             if (
-              (key.includes(espnAwayName) || key.includes(espnHomeName)) &&
-              (key.includes(espnHomeName) || key.includes(espnAwayName))
+              (keyAway === espnAwayName || keyAway === espnHomeName) &&
+              (keyHome === espnHomeName || keyHome === espnAwayName)
             ) {
               oddsGame = game;
               break;
@@ -204,11 +230,59 @@ export const fetchDailyGamesHybrid = async (date, oddsApiKey) => {
         let spread_value = null;
 
         if (oddsGame && oddsGame.spread_value !== null) {
-          spread = oddsGame.spread;
           spread_value = oddsGame.spread_value;
+          // Parse the spread string to find which team is the favorite
+          // The spread format from Odds API is "TEAM_NAME -X.X"
+          if (oddsGame.spread) {
+            const spreadParts = oddsGame.spread.trim().split(/\s+/);
+            if (spreadParts.length >= 2) {
+              const favoriteTeamName = spreadParts.slice(0, -1).join(" "); // Handle multi-word team names
+              const favoriteNormalized = normalizeName(favoriteTeamName);
+
+              // Match to ESPN team and use ESPN abbreviation
+              if (
+                favoriteNormalized === espnAwayName &&
+                awayTeam.team.abbreviation
+              ) {
+                spread = `${awayTeam.team.abbreviation} ${spread_value}`;
+              } else if (
+                favoriteNormalized === espnHomeName &&
+                homeTeam.team.abbreviation
+              ) {
+                spread = `${homeTeam.team.abbreviation} ${spread_value}`;
+              } else {
+                // Try matching against Odds API team names
+                const oddsAwayNormalized = normalizeName(oddsGame.team_a);
+                const oddsHomeNormalized = normalizeName(oddsGame.team_b);
+
+                if (
+                  favoriteNormalized === oddsAwayNormalized &&
+                  favoriteNormalized === espnAwayName &&
+                  awayTeam.team.abbreviation
+                ) {
+                  spread = `${awayTeam.team.abbreviation} ${spread_value}`;
+                } else if (
+                  favoriteNormalized === oddsHomeNormalized &&
+                  favoriteNormalized === espnHomeName &&
+                  homeTeam.team.abbreviation
+                ) {
+                  spread = `${homeTeam.team.abbreviation} ${spread_value}`;
+                } else {
+                  // Can't determine, skip this spread
+                  spread = null;
+                  spread_value = null;
+                }
+              }
+            }
+          }
         } else if (competition.odds && competition.odds.length > 0) {
-          spread = competition.odds[0].details;
-          spread_value = competition.odds[0].spread;
+          // Look for favorite's spread (negative value) in ESPN odds
+          const favoriteOdds = competition.odds.find((odds) => odds.spread < 0);
+          if (favoriteOdds) {
+            spread = favoriteOdds.details;
+            spread_value = favoriteOdds.spread;
+          }
+          // If no favorite spread found, skip (don't use underdog spread)
         }
 
         const getRecord = (team) => {
@@ -218,7 +292,7 @@ export const fetchDailyGamesHybrid = async (date, oddsApiKey) => {
 
         const getRank = (team) => {
           return team?.curatedRank?.current <= 25
-            ? team.curatedRank.current
+            ? team?.curatedRank?.current
             : null;
         };
 

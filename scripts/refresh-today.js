@@ -178,11 +178,14 @@ async function refreshTodaysGames() {
 
     for (const game of games) {
       // Filter: Must include at least one team from major conferences
-      const teamAConf = String(game.team_a_conf_id);
-      const teamBConf = String(game.team_b_conf_id);
+      // Ensure we compare strings, handling null/undefined
+      const teamAConf =
+        game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
+      const teamBConf =
+        game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
       if (
-        !MAJOR_CONFERENCES.includes(teamAConf) &&
-        !MAJOR_CONFERENCES.includes(teamBConf)
+        (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
+        (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
       ) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
@@ -193,6 +196,7 @@ async function refreshTodaysGames() {
 
       // Filter: Skip games without a valid spread
       // Check if spread is null, undefined, or set to "off"
+      // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
       if (
         game.spread_value === null ||
         game.spread_value === undefined ||
@@ -209,11 +213,29 @@ async function refreshTodaysGames() {
       }
 
       // Filter: If spread exists, only import games with spread <= 12
-      if (Math.abs(game.spread_value) > 12) {
+      // Ensure spread_value is a valid number before using Math.abs
+      if (
+        typeof game.spread_value !== "number" ||
+        isNaN(game.spread_value) ||
+        Math.abs(game.spread_value) > 12
+      ) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
         );
         skippedSpread++;
+        continue;
+      }
+
+      // Validate required fields before attempting database operations
+      if (
+        !game.external_id ||
+        !game.team_a ||
+        !game.team_b ||
+        !game.start_time
+      ) {
+        console.log(
+          `Skipping game: Missing required fields (external_id: ${game.external_id}, team_a: ${game.team_a}, team_b: ${game.team_b}, start_time: ${game.start_time})`
+        );
         continue;
       }
 
@@ -222,7 +244,7 @@ async function refreshTodaysGames() {
         .from("games")
         .select("id, spread, status")
         .eq("external_id", game.external_id)
-        .single();
+        .maybeSingle();
 
       if (fetchError && fetchError.code !== "PGRST116") {
         // PGRST116 is "not found" which is fine

@@ -40,22 +40,39 @@ export default function Admin() {
         // Filter: Must include at least one team from major conferences
         // ACC: 2, Big East: 4, Big Ten: 7, Big 12: 8, SEC: 23
         const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
-        // Convert to strings since ESPN API returns conference IDs as numbers
-        const teamAConf = String(game.team_a_conf_id);
-        const teamBConf = String(game.team_b_conf_id);
+        // Convert to strings, handling null/undefined
+        const teamAConf =
+          game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
+        const teamBConf =
+          game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
         if (
-          !MAJOR_CONFERENCES.includes(teamAConf) &&
-          !MAJOR_CONFERENCES.includes(teamBConf)
+          (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
+          (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
+        ) {
+          continue;
+        }
+
+        // Validate required fields
+        if (
+          !game.external_id ||
+          !game.team_a ||
+          !game.team_b ||
+          !game.start_time
         ) {
           continue;
         }
 
         // Check if game exists
-        const { data: existing } = await supabase
+        const { data: existing, error: existingError } = await supabase
           .from("games")
           .select("id")
           .eq("external_id", game.external_id)
-          .single();
+          .maybeSingle();
+
+        // If there's an error (other than "not found"), skip
+        if (existingError && existingError.code !== "PGRST116") {
+          continue;
+        }
 
         if (!existing) {
           const { error } = await supabase.from("games").insert([
@@ -82,7 +99,11 @@ export default function Admin() {
               game_date: game.game_date,
             },
           ]);
-          if (!error) importedCount++;
+          if (error) {
+            console.error("Error inserting game:", error);
+          } else {
+            importedCount++;
+          }
         }
       }
       setMessage(`Successfully imported ${importedCount} new games.`);
@@ -229,7 +250,7 @@ export default function Admin() {
           .from("profiles")
           .select("total_points, total_wins, total_losses")
           .eq("id", pick.user_id)
-          .single();
+          .maybeSingle();
 
         if (profileError) {
           console.error(

@@ -57,7 +57,7 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
 
         const getRank = (team) => {
           return team?.curatedRank?.current <= 25
-            ? team.curatedRank.current
+            ? team?.curatedRank?.current
             : null;
         };
 
@@ -246,7 +246,7 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
 
         const getRank = (team) => {
           return team?.curatedRank?.current <= 25
-            ? team.curatedRank.current
+            ? team?.curatedRank?.current
             : null;
         };
 

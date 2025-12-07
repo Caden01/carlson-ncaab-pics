@@ -3,7 +3,6 @@ create table profiles (
   id uuid references auth.users not null primary key,
   email text,
   username text,
-  username text,
   total_points integer default 0,
   total_wins integer default 0,
   total_losses integer default 0,

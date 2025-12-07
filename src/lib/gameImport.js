@@ -18,13 +18,15 @@ export const importGamesForDate = async (dateStr) => {
 
     for (const game of games) {
       // Filter: Must include at least one team from major conferences
-      // Ensure we compare strings
-      const teamAConf = String(game.team_a_conf_id);
-      const teamBConf = String(game.team_b_conf_id);
+      // Ensure we compare strings, handling null/undefined
+      const teamAConf =
+        game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
+      const teamBConf =
+        game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
 
       if (
-        !MAJOR_CONFERENCES.includes(teamAConf) &&
-        !MAJOR_CONFERENCES.includes(teamBConf)
+        (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
+        (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
       ) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
@@ -34,9 +36,10 @@ export const importGamesForDate = async (dateStr) => {
 
       // Filter: Skip games without a valid spread
       // Check if spread is null, undefined, or set to "off"
+      // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
       if (
-        !game.spread_value ||
         game.spread_value === null ||
+        game.spread_value === undefined ||
         !game.spread ||
         game.spread === null ||
         (typeof game.spread === "string" &&
@@ -49,19 +52,46 @@ export const importGamesForDate = async (dateStr) => {
       }
 
       // Filter: If spread exists, only import games with spread <= 12
-      if (Math.abs(game.spread_value) > 12) {
+      // Ensure spread_value is a valid number before using Math.abs
+      if (
+        typeof game.spread_value !== "number" ||
+        isNaN(game.spread_value) ||
+        Math.abs(game.spread_value) > 12
+      ) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
         );
         continue;
       }
 
+      // Validate required fields before attempting database operations
+      if (
+        !game.external_id ||
+        !game.team_a ||
+        !game.team_b ||
+        !game.start_time
+      ) {
+        console.log(
+          `Skipping game: Missing required fields (external_id: ${game.external_id}, team_a: ${game.team_a}, team_b: ${game.team_b}, start_time: ${game.start_time})`
+        );
+        continue;
+      }
+
       // Check if game exists
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("games")
         .select("id")
         .eq("external_id", game.external_id)
-        .single();
+        .maybeSingle();
+
+      // If there's an error (other than "not found"), log and skip
+      if (existingError && existingError.code !== "PGRST116") {
+        console.error(
+          `Error checking game ${game.external_id}:`,
+          existingError.message
+        );
+        continue;
+      }
 
       if (!existing) {
         const { error } = await supabase.from("games").insert([
@@ -88,7 +118,14 @@ export const importGamesForDate = async (dateStr) => {
             game_date: game.game_date,
           },
         ]);
-        if (!error) importedCount++;
+        if (error) {
+          console.error(
+            `Error inserting game ${game.external_id} (${game.team_a} vs ${game.team_b}):`,
+            error.message
+          );
+        } else {
+          importedCount++;
+        }
       }
     }
     return importedCount;
