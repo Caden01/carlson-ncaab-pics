@@ -78,10 +78,7 @@ export default function Dashboard() {
       const hasActiveGames = currentGames.some(
         (g) => g.status === "in_progress"
       );
-      if (
-        hasActiveGames &&
-        selectedDate === new Date().toISOString().split("T")[0]
-      ) {
+      if (hasActiveGames && selectedDate === getLocalDate()) {
         await syncLiveScores();
       }
     }, 60000); // Check every minute
@@ -427,6 +424,11 @@ export default function Dashboard() {
                           <span className="team-rank">#{game.team_a_rank}</span>
                         )}
                         <span className="team-name">{game.team_a}</span>
+                        {game.status !== "scheduled" &&
+                          game.result_a !== null &&
+                          game.result_b !== null && (
+                            <span className="team-score">{game.result_a}</span>
+                          )}
                       </div>
                       {game.team_a_record && (
                         <span className="team-record">
@@ -449,6 +451,11 @@ export default function Dashboard() {
                           <span className="team-rank">#{game.team_b_rank}</span>
                         )}
                         <span className="team-name">{game.team_b}</span>
+                        {game.status !== "scheduled" &&
+                          game.result_a !== null &&
+                          game.result_b !== null && (
+                            <span className="team-score">{game.result_b}</span>
+                          )}
                       </div>
                       {game.team_b_record && (
                         <span className="team-record">
@@ -475,13 +482,6 @@ export default function Dashboard() {
                     {game.spread && (
                       <span className="game-spread">{game.spread}</span>
                     )}
-                    {game.status !== "scheduled" &&
-                      game.result_a !== null &&
-                      game.result_b !== null && (
-                        <span className="game-score">
-                          {game.result_a} - {game.result_b}
-                        </span>
-                      )}
                   </div>
                 </div>
                 <div className="teams-container">

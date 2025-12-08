@@ -347,11 +347,6 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.spreadText}>{game.spread}</Text>
             </View>
           )}
-          {game.status !== "scheduled" && (
-            <Text style={styles.score}>
-              {game.result_a} - {game.result_b}
-            </Text>
-          )}
         </View>
 
         {/* Teams */}
@@ -385,6 +380,11 @@ export default function DashboardScreen({ navigation }) {
               >
                 {game.team_a}
               </Text>
+              {game.status !== "scheduled" &&
+                game.result_a !== null &&
+                game.result_b !== null && (
+                  <Text style={styles.teamScore}>{game.result_a}</Text>
+                )}
               {game.team_a_record && (
                 <Text style={styles.record}>({game.team_a_record})</Text>
               )}
@@ -463,6 +463,11 @@ export default function DashboardScreen({ navigation }) {
               >
                 {game.team_b}
               </Text>
+              {game.status !== "scheduled" &&
+                game.result_a !== null &&
+                game.result_b !== null && (
+                  <Text style={styles.teamScore}>{game.result_b}</Text>
+                )}
               {game.team_b_record && (
                 <Text style={styles.record}>({game.team_b_record})</Text>
               )}
@@ -650,6 +655,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: spacing.lg,
+    gap: spacing.sm,
+    flexWrap: "wrap",
   },
   gameTimeContainer: {
     flex: 1,
@@ -664,16 +671,29 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
   spreadBadge: {
-    backgroundColor: "rgba(59, 130, 246, 0.1)",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
+    backgroundColor: "rgba(234, 88, 12, 0.15)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
     marginHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(234, 88, 12, 0.3)",
+    flexShrink: 0,
   },
   spreadText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
     color: colors.primary,
+  },
+  teamScore: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.textMain,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: "rgba(59, 130, 246, 0.15)",
+    borderRadius: borderRadius.sm,
+    flexShrink: 0,
   },
   score: {
     fontSize: fontSize.lg,
@@ -712,7 +732,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    gap: spacing.xs,
+    gap: spacing.sm,
+    flexWrap: "wrap",
   },
   rank: {
     fontSize: fontSize.xs,
@@ -723,7 +744,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
     color: colors.textMain,
-    flex: 1,
+    flexShrink: 1,
+    minWidth: 80,
   },
   teamNameSelected: {
     color: colors.primary,

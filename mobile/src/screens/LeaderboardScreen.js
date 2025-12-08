@@ -134,7 +134,8 @@ export default function LeaderboardScreen() {
           .sort((a, b) => {
             if (b.wins !== a.wins) return b.wins - a.wins;
             if (a.losses !== b.losses) return a.losses - b.losses;
-            return 0;
+            // Tiebreaker: more weekly champions wins
+            return (b.weeklyWins || 0) - (a.weeklyWins || 0);
           });
         setLeaderboardData(ranked);
         return;
@@ -204,7 +205,8 @@ export default function LeaderboardScreen() {
         .sort((a, b) => {
           if (b.wins !== a.wins) return b.wins - a.wins;
           if (a.losses !== b.losses) return a.losses - b.losses;
-          return 0;
+          // Tiebreaker: more weekly champions wins
+          return (b.weeklyWins || 0) - (a.weeklyWins || 0);
         });
 
       setLeaderboardData(ranked);

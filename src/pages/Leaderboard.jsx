@@ -121,10 +121,11 @@ export default function Leaderboard() {
             weeklyWins: profile.weekly_wins || 0,
           }))
           .sort((a, b) => {
-            // Sort by wins, then by fewer losses, then by win rate
+            // Sort by wins, then by fewer losses, then by weekly champions
             if (b.wins !== a.wins) return b.wins - a.wins;
             if (a.losses !== b.losses) return a.losses - b.losses;
-            return 0;
+            // Tiebreaker: more weekly champions wins
+            return (b.weeklyWins || 0) - (a.weeklyWins || 0);
           });
         setLeaderboardData(ranked);
         return;
@@ -197,10 +198,11 @@ export default function Leaderboard() {
           gamesCount: games.length,
         }))
         .sort((a, b) => {
-          // Sort by wins, then by fewer losses
+          // Sort by wins, then by fewer losses, then by weekly champions
           if (b.wins !== a.wins) return b.wins - a.wins;
           if (a.losses !== b.losses) return a.losses - b.losses;
-          return 0;
+          // Tiebreaker: more weekly champions wins
+          return (b.weeklyWins || 0) - (a.weeklyWins || 0);
         });
 
       setLeaderboardData(ranked);
@@ -445,7 +447,7 @@ export default function Leaderboard() {
         }
       });
     }
-  }, [showWeeklyChampions, weeklyWinners]);
+  }, [showWeeklyChampions, weeklyWinners, profiles]);
 
   if (loading) {
     return (
