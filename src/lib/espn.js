@@ -281,8 +281,8 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
           status: event.status.type.state, // 'pre', 'in', 'post'
           team_a: awayTeam.team.displayName,
           team_b: homeTeam.team.displayName,
-          result_a: awayTeam.score ? parseInt(awayTeam.score) : null,
-          result_b: homeTeam.score ? parseInt(homeTeam.score) : null,
+          result_a: awayTeam.score ? parseInt(awayTeam.score, 10) : null,
+          result_b: homeTeam.score ? parseInt(homeTeam.score, 10) : null,
           // Helper for UI
           team_a_logo: awayTeam.team.logo,
           team_b_logo: homeTeam.team.logo,
@@ -622,8 +622,8 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
           status: event.status.type.state,
           team_a: awayTeam.team.displayName,
           team_b: homeTeam.team.displayName,
-          result_a: awayTeam.score ? parseInt(awayTeam.score) : null,
-          result_b: homeTeam.score ? parseInt(homeTeam.score) : null,
+          result_a: awayTeam.score ? parseInt(awayTeam.score, 10) : null,
+          result_b: homeTeam.score ? parseInt(homeTeam.score, 10) : null,
           spread: spread,
           spread_value: spread_value,
           team_a_record: getRecord(awayTeam),

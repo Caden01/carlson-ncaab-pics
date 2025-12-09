@@ -71,6 +71,7 @@ export const AuthProvider = ({ children }) => {
     },
     user,
     isAdmin,
+    loading,
   };
 
   return (

@@ -26,9 +26,19 @@ function didTeamCover(game, teamName) {
   if (game.status !== "finished" && game.status !== "post") return null;
   if (!game.spread || !game.spread.includes(" ")) return null;
 
-  const parts = game.spread.split(" ");
+  // Parse spread string (e.g., "KAN -5.5")
+  // Use regex to split on whitespace and filter out empty strings
+  // This handles cases with multiple spaces (e.g., "KAN  -5.5")
+  const parts = game.spread
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p.length > 0);
+  // Ensure we have at least 2 parts (team abbreviation and spread value)
+  if (parts.length < 2) return null;
+
   const spreadTeamAbbrev = parts[0];
-  const spreadValue = parseFloat(parts[1]);
+  // The spread value should be the last part (handles multi-word team names)
+  const spreadValue = parseFloat(parts[parts.length - 1]);
 
   if (isNaN(spreadValue)) return null;
 
@@ -243,20 +253,39 @@ async function syncActiveGames() {
             const newStatus =
               espnGame.status === "post" ? "finished" : "in_progress";
 
+            const updates = {
+              status: newStatus,
+              team_a_record: espnGame.team_a_record,
+              team_a_rank: espnGame.team_a_rank,
+              team_b_record: espnGame.team_b_record,
+              team_b_rank: espnGame.team_b_rank,
+            };
+
+            // Check if teams are swapped in DB compared to ESPN
+            // This handles neutral site games where Home/Away designation might differ
+            if (
+              dbGame.team_a === espnGame.team_b &&
+              dbGame.team_b === espnGame.team_a
+            ) {
+              updates.result_a = espnGame.result_b;
+              updates.result_b = espnGame.result_a;
+              updates.team_a_abbrev = espnGame.team_b_abbrev;
+              updates.team_b_abbrev = espnGame.team_a_abbrev;
+            } else {
+              updates.result_a = espnGame.result_a;
+              updates.result_b = espnGame.result_b;
+              updates.team_a_abbrev = espnGame.team_a_abbrev;
+              updates.team_b_abbrev = espnGame.team_b_abbrev;
+            }
+
+            // Only update spread if it's available from ESPN
+            if (espnGame.spread) {
+              updates.spread = espnGame.spread;
+            }
+
             const { error: updateError } = await supabase
               .from("games")
-              .update({
-                status: newStatus,
-                result_a: espnGame.result_a,
-                result_b: espnGame.result_b,
-                spread: espnGame.spread,
-                team_a_record: espnGame.team_a_record,
-                team_a_rank: espnGame.team_a_rank,
-                team_b_record: espnGame.team_b_record,
-                team_b_rank: espnGame.team_b_rank,
-                team_a_abbrev: espnGame.team_a_abbrev,
-                team_b_abbrev: espnGame.team_b_abbrev,
-              })
+              .update(updates)
               .eq("id", dbGame.id);
 
             if (updateError) {
@@ -281,8 +310,138 @@ async function syncActiveGames() {
   }
 }
 
+// Get yesterday's date in PST/PDT
+function getYesterdayPSTDate() {
+  const now = new Date();
+  // Subtract 24 hours
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  return formatDatePST(yesterday);
+}
+
+async function importGamesForDate(dateStr, dateName) {
+  console.log(`\n--- Importing Games for ${dateName}: ${dateStr} ---`);
+
+  // Use hybrid approach if Odds API key is available, otherwise ESPN only
+  const games = await fetchDailyGames(dateStr, ODDS_API_KEY);
+
+  if (games.length === 0) {
+    console.log(`No games found for ${dateName}.`);
+    return { imported: 0, skippedSpread: 0, skippedConference: 0 };
+  }
+
+  let importedCount = 0;
+  let skippedSpread = 0;
+  let skippedConference = 0;
+
+  for (const game of games) {
+    // Filter: Must include at least one team from major conferences
+    // Ensure we compare strings, handling null/undefined
+    const teamAConf =
+      game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
+    const teamBConf =
+      game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
+    if (
+      (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
+      (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
+    ) {
+      console.log(
+        `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
+      );
+      skippedConference++;
+      continue;
+    }
+
+    // Filter: Skip games without a valid spread
+    // Check if spread is null, undefined, or set to "off"
+    // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
+    if (
+      game.spread_value === null ||
+      game.spread_value === undefined ||
+      !game.spread ||
+      game.spread === null ||
+      (typeof game.spread === "string" &&
+        game.spread.toLowerCase().includes("off"))
+    ) {
+      console.log(
+        `Skipping ${game.team_a} vs ${game.team_b}: No valid spread (spread: ${game.spread}, spread_value: ${game.spread_value})`
+      );
+      skippedSpread++;
+      continue;
+    }
+
+    // Filter: If spread exists, only import games with spread <= 12
+    // Ensure spread_value is a valid number before using Math.abs
+    if (
+      typeof game.spread_value !== "number" ||
+      isNaN(game.spread_value) ||
+      Math.abs(game.spread_value) > 12
+    ) {
+      console.log(
+        `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
+      );
+      skippedSpread++;
+      continue;
+    }
+
+    // Validate required fields before attempting database operations
+    if (!game.external_id || !game.team_a || !game.team_b || !game.start_time) {
+      console.log(
+        `Skipping game: Missing required fields (external_id: ${game.external_id}, team_a: ${game.team_a}, team_b: ${game.team_b}, start_time: ${game.start_time})`
+      );
+      continue;
+    }
+
+    // Check if game exists
+    const { data: existing, error: existingError } = await supabase
+      .from("games")
+      .select("id")
+      .eq("external_id", game.external_id)
+      .maybeSingle();
+
+    // If there's an error (other than "not found"), log and skip
+    if (existingError && existingError.code !== "PGRST116") {
+      console.error(
+        `Error checking game ${game.external_id}:`,
+        existingError.message
+      );
+      continue;
+    }
+
+    if (!existing) {
+      const { error } = await supabase.from("games").insert([
+        {
+          external_id: game.external_id,
+          team_a: game.team_a,
+          team_b: game.team_b,
+          start_time: game.start_time,
+          status:
+            game.status === "pre"
+              ? "scheduled"
+              : game.status === "post"
+              ? "finished"
+              : "in_progress",
+          result_a: game.result_a,
+          result_b: game.result_b,
+          spread: game.spread,
+          team_a_record: game.team_a_record,
+          team_a_rank: game.team_a_rank,
+          team_b_record: game.team_b_record,
+          team_b_rank: game.team_b_rank,
+          team_a_abbrev: game.team_a_abbrev,
+          team_b_abbrev: game.team_b_abbrev,
+          game_date: game.game_date,
+        },
+      ]);
+      if (!error) importedCount++;
+      else console.error("Error inserting game:", error);
+    }
+  }
+
+  return { imported: importedCount, skippedSpread, skippedConference };
+}
+
 async function importTodaysGames() {
-  console.log("--- Importing Today's Games ---");
+  console.log("--- Importing Today's and Yesterday's Games ---");
   try {
     // Check if we should import games based on time
     if (!shouldImportGames()) {
@@ -306,14 +465,12 @@ async function importTodaysGames() {
       return;
     }
 
-    // Get today's date in PST/PDT in YYYYMMDD format
-    // Only import games for today, not tomorrow
+    // Get today's and yesterday's dates in PST/PDT
     const todayPST = getPSTDate();
-    const dateStr = todayPST.replace(/-/g, "");
+    const yesterdayPST = getYesterdayPSTDate();
+    const todayDateStr = todayPST.replace(/-/g, "");
+    const yesterdayDateStr = yesterdayPST.replace(/-/g, "");
 
-    console.log(`Fetching games for today (PST): ${todayPST} (${dateStr})`);
-    // Use hybrid approach if Odds API key is available, otherwise ESPN only
-    const games = await fetchDailyGames(dateStr, ODDS_API_KEY);
     if (ODDS_API_KEY) {
       console.log("Using hybrid approach: ESPN game data + Odds API spreads");
     } else {
@@ -322,129 +479,31 @@ async function importTodaysGames() {
       );
     }
 
-    if (games.length === 0) {
-      console.log("No games found for today.");
-      return;
-    }
+    // Import yesterday's games first (to catch any that were missed)
+    const yesterdayResults = await importGamesForDate(
+      yesterdayDateStr,
+      `yesterday (${yesterdayPST})`
+    );
 
-    let importedCount = 0;
-    let skippedSpread = 0;
-    let skippedConference = 0;
-    let pendingSpread = 0;
+    // Then import today's games
+    const todayResults = await importGamesForDate(
+      todayDateStr,
+      `today (${todayPST})`
+    );
 
-    for (const game of games) {
-      // Filter: Must include at least one team from major conferences
-      // Ensure we compare strings, handling null/undefined
-      const teamAConf =
-        game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
-      const teamBConf =
-        game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
-      if (
-        (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
-        (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
-      ) {
-        console.log(
-          `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
-        );
-        skippedConference++;
-        continue;
-      }
-
-      // Filter: Skip games without a valid spread
-      // Check if spread is null, undefined, or set to "off"
-      // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
-      if (
-        game.spread_value === null ||
-        game.spread_value === undefined ||
-        !game.spread ||
-        game.spread === null ||
-        (typeof game.spread === "string" &&
-          game.spread.toLowerCase().includes("off"))
-      ) {
-        console.log(
-          `Skipping ${game.team_a} vs ${game.team_b}: No valid spread (spread: ${game.spread}, spread_value: ${game.spread_value})`
-        );
-        skippedSpread++;
-        continue;
-      }
-
-      // Filter: If spread exists, only import games with spread <= 12
-      // Ensure spread_value is a valid number before using Math.abs
-      if (
-        typeof game.spread_value !== "number" ||
-        isNaN(game.spread_value) ||
-        Math.abs(game.spread_value) > 12
-      ) {
-        console.log(
-          `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
-        );
-        skippedSpread++;
-        continue;
-      }
-
-      // Validate required fields before attempting database operations
-      if (
-        !game.external_id ||
-        !game.team_a ||
-        !game.team_b ||
-        !game.start_time
-      ) {
-        console.log(
-          `Skipping game: Missing required fields (external_id: ${game.external_id}, team_a: ${game.team_a}, team_b: ${game.team_b}, start_time: ${game.start_time})`
-        );
-        continue;
-      }
-
-      // Check if game exists
-      const { data: existing, error: existingError } = await supabase
-        .from("games")
-        .select("id")
-        .eq("external_id", game.external_id)
-        .maybeSingle();
-
-      // If there's an error (other than "not found"), log and skip
-      if (existingError && existingError.code !== "PGRST116") {
-        console.error(
-          `Error checking game ${game.external_id}:`,
-          existingError.message
-        );
-        continue;
-      }
-
-      if (!existing) {
-        const { error } = await supabase.from("games").insert([
-          {
-            external_id: game.external_id,
-            team_a: game.team_a,
-            team_b: game.team_b,
-            start_time: game.start_time,
-            status:
-              game.status === "pre"
-                ? "scheduled"
-                : game.status === "post"
-                ? "finished"
-                : "in_progress",
-            result_a: game.result_a,
-            result_b: game.result_b,
-            spread: game.spread,
-            team_a_record: game.team_a_record,
-            team_a_rank: game.team_a_rank,
-            team_b_record: game.team_b_record,
-            team_b_rank: game.team_b_rank,
-            team_a_abbrev: game.team_a_abbrev,
-            team_b_abbrev: game.team_b_abbrev,
-            game_date: game.game_date,
-          },
-        ]);
-        if (!error) importedCount++;
-        else console.error("Error inserting game:", error);
-      }
-    }
     console.log(`\n=== Import Summary ===`);
-    console.log(`Imported: ${importedCount} new games`);
-    console.log(`Pending spread: ${pendingSpread} games (will update later)`);
-    console.log(`Skipped (spread > 12): ${skippedSpread}`);
-    console.log(`Skipped (conference): ${skippedConference}`);
+    console.log(`Yesterday: ${yesterdayResults.imported} new games imported`);
+    console.log(`Today: ${todayResults.imported} new games imported`);
+    console.log(
+      `Total skipped (spread > 12 or no spread): ${
+        yesterdayResults.skippedSpread + todayResults.skippedSpread
+      }`
+    );
+    console.log(
+      `Total skipped (conference): ${
+        yesterdayResults.skippedConference + todayResults.skippedConference
+      }`
+    );
   } catch (error) {
     console.error("Error importing games:", error);
   }

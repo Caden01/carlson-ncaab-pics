@@ -103,23 +103,30 @@ export default function Dashboard() {
 
       let finalGamesData = gamesData || [];
 
-      // Auto-import if no games found
+      // Auto-import if no games found, but ONLY for today or past dates (not future)
       if (finalGamesData.length === 0) {
-        console.log("No games found in DB, attempting auto-import...");
-        const dateStr = selectedDate.replace(/-/g, "");
-        const importedCount = await importGamesForDate(dateStr);
+        const today = getLocalDate();
+        const isFutureDate = selectedDate > today;
 
-        if (importedCount > 0) {
-          // Re-fetch games
-          const { data: refetchedGames } = await supabase
-            .from("games")
-            .select("*")
-            .eq("game_date", selectedDate)
-            .order("start_time", { ascending: true });
+        if (!isFutureDate) {
+          console.log("No games found in DB, attempting auto-import...");
+          const dateStr = selectedDate.replace(/-/g, "");
+          const importedCount = await importGamesForDate(dateStr);
 
-          if (refetchedGames) {
-            finalGamesData = refetchedGames;
+          if (importedCount > 0) {
+            // Re-fetch games
+            const { data: refetchedGames } = await supabase
+              .from("games")
+              .select("*")
+              .eq("game_date", selectedDate)
+              .order("start_time", { ascending: true });
+
+            if (refetchedGames) {
+              finalGamesData = refetchedGames;
+            }
           }
+        } else {
+          console.log("Not auto-importing for future date:", selectedDate);
         }
       }
 
@@ -346,50 +353,46 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {isAdmin &&
-        user?.email === "crcgames3@gmail.com" &&
-        allProfiles.length > 0 && (
-          <div className="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
-            <div className="flex items-center gap-2 mb-2 text-amber-500 font-semibold">
-              <ShieldAlert size={20} />
-              <span>Admin Override Mode</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="text-sm text-slate-400">
-                Making picks for:
-              </label>
-              <div className="relative flex-1 max-w-xs">
-                <select
-                  className="w-full p-2 pl-9 bg-slate-900 border border-slate-700 rounded text-white appearance-none cursor-pointer focus:border-amber-500 outline-none"
-                  value={actingUser?.id || ""}
-                  onChange={(e) => {
-                    const selected = allProfiles.find(
-                      (p) => p.id === e.target.value
-                    );
-                    if (selected) {
-                      setActingUser({
-                        id: selected.id,
-                        username: selected.username || selected.email,
-                        email: selected.email,
-                      });
-                    }
-                  }}
-                >
-                  {allProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.username || profile.email}{" "}
-                      {profile.id === user.id ? "(You)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <Users
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-                />
-              </div>
+      {isAdmin && allProfiles.length > 0 && (
+        <div className="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
+          <div className="flex items-center gap-2 mb-2 text-amber-500 font-semibold">
+            <ShieldAlert size={20} />
+            <span>Admin Override Mode</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="text-sm text-slate-400">Making picks for:</label>
+            <div className="relative flex-1 max-w-xs">
+              <select
+                className="w-full p-2 pl-9 bg-slate-900 border border-slate-700 rounded text-white appearance-none cursor-pointer focus:border-amber-500 outline-none"
+                value={actingUser?.id || ""}
+                onChange={(e) => {
+                  const selected = allProfiles.find(
+                    (p) => p.id === e.target.value
+                  );
+                  if (selected) {
+                    setActingUser({
+                      id: selected.id,
+                      username: selected.username || selected.email,
+                      email: selected.email,
+                    });
+                  }
+                }}
+              >
+                {allProfiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.username || profile.email}{" "}
+                    {profile.id === user.id ? "(You)" : ""}
+                  </option>
+                ))}
+              </select>
+              <Users
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+              />
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {games.length === 0 ? (
         <div className="empty-state">
