@@ -84,12 +84,31 @@ export default function Leaderboard() {
       setProfiles(profilesData || []);
 
       // Fetch weekly winners history
+      // Handle duplicates by grouping by week_start and taking the first (earliest) entry
       const { data: winnersData } = await supabase
         .from("weekly_winners")
         .select("*, profiles(username, email)")
-        .order("week_start", { ascending: false });
+        .order("created_at", { ascending: true });
 
-      setWeeklyWinners(winnersData || []);
+      // Filter out duplicates - keep only the first winner (earliest created_at) for each week
+      // Then sort by week_start descending for display
+      const uniqueWinners = [];
+      const seenWeeks = new Set();
+      if (winnersData) {
+        for (const winner of winnersData) {
+          if (!seenWeeks.has(winner.week_start)) {
+            seenWeeks.add(winner.week_start);
+            uniqueWinners.push(winner);
+          }
+        }
+      }
+
+      // Sort by week_start descending for display (most recent first)
+      uniqueWinners.sort((a, b) => {
+        return new Date(b.week_start) - new Date(a.week_start);
+      });
+
+      setWeeklyWinners(uniqueWinners);
 
       // Calculate records based on active tab
       await calculateRecords(profilesData || [], activeTab);
@@ -328,11 +347,18 @@ export default function Leaderboard() {
       if (!games || games.length === 0) {
         // No games in database for this week
         // Try to get at least the winner's record from weekly_winners
-        const { data: winnerData } = await supabase
+        // Handle duplicates by taking the first one (earliest created_at)
+        const { data: winnerDataList } = await supabase
           .from("weekly_winners")
           .select("user_id, wins, losses")
           .eq("week_start", weekStart)
-          .maybeSingle();
+          .order("created_at", { ascending: true })
+          .limit(1);
+
+        const winnerData =
+          winnerDataList && winnerDataList.length > 0
+            ? winnerDataList[0]
+            : null;
 
         if (winnerData) {
           // Show all players, with winner having their record, others showing N/A

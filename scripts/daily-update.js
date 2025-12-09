@@ -50,22 +50,120 @@ function didTeamCover(game, teamName) {
   return margin + effectiveSpread > 0;
 }
 
-// Get Monday of a given week
-function getWeekStart(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  return monday.toISOString().split("T")[0];
+// Format a date as YYYY-MM-DD in PST timezone (consistent across all environments)
+function formatDatePST(date) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(date);
 }
 
-// Get Sunday of a given week
+// Get Monday of a given week (in PST)
+function getWeekStart(date = new Date()) {
+  // First, get the date components in PST
+  const pstFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  });
+  const parts = pstFormatter.formatToParts(date);
+  const year = parseInt(parts.find((p) => p.type === "year").value);
+  const month = parseInt(parts.find((p) => p.type === "month").value) - 1;
+  const day = parseInt(parts.find((p) => p.type === "day").value);
+
+  // Create a date object for noon PST to avoid DST issues
+  const d = new Date(year, month, day, 12, 0, 0);
+  const dayOfWeek = d.getDay();
+  const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  return formatDatePST(monday);
+}
+
+// Get Sunday of a given week (in PST)
 function getWeekEnd(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? 0 : 7);
+  // First, get the date components in PST
+  const pstFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = pstFormatter.formatToParts(date);
+  const year = parseInt(parts.find((p) => p.type === "year").value);
+  const month = parseInt(parts.find((p) => p.type === "month").value) - 1;
+  const day = parseInt(parts.find((p) => p.type === "day").value);
+
+  // Create a date object for noon PST to avoid DST issues
+  const d = new Date(year, month, day, 12, 0, 0);
+  const dayOfWeek = d.getDay();
+  const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? 0 : 7);
   const sunday = new Date(d.setDate(diff));
-  return sunday.toISOString().split("T")[0];
+  return formatDatePST(sunday);
+}
+
+// Get current date in PST/PDT
+function getPSTDate() {
+  const now = new Date();
+  // Use Intl.DateTimeFormat for reliable timezone conversion
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(now);
+  const year = parts.find((p) => p.type === "year").value;
+  const month = parts.find((p) => p.type === "month").value;
+  const day = parts.find((p) => p.type === "day").value;
+  return `${year}-${month}-${day}`;
+}
+
+// Get current hour in PST/PDT
+function getPSTHour() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "numeric",
+    hour12: false,
+  });
+  return parseInt(formatter.format(now), 10);
+}
+
+// Get current day of week in PST/PDT (0 = Sunday, 6 = Saturday)
+function getPSTDayOfWeek() {
+  const now = new Date();
+  // Get the date string in PST, then parse it to get the day of week
+  const pstDateStr = getPSTDate();
+  const [year, month, day] = pstDateStr.split("-").map(Number);
+  const pstDate = new Date(year, month - 1, day);
+  return pstDate.getDay(); // 0 = Sunday, 6 = Saturday
+}
+
+// Check if we should import games based on current time
+// Weekdays: Only after 2pm PST (14:00)
+// Weekends: Only after 7am PST (07:00)
+function shouldImportGames() {
+  const pstHour = getPSTHour();
+  const dayOfWeek = getPSTDayOfWeek(); // 0 = Sunday, 6 = Saturday
+
+  // Weekdays (Monday=1 to Friday=5)
+  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+    // Must be 14:00 PST (2pm) or later
+    return pstHour >= 14;
+  }
+
+  // Weekends (Saturday=6, Sunday=0)
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    // Must be 07:00 PST (7am) or later
+    return pstHour >= 7;
+  }
+
+  return false;
 }
 
 async function syncActiveGames() {
@@ -186,13 +284,34 @@ async function syncActiveGames() {
 async function importTodaysGames() {
   console.log("--- Importing Today's Games ---");
   try {
-    // Get today's date in YYYYMMDD format (PST/PDT roughly, or just UTC)
-    // The user asked for 6:00 AM PST.
-    // If this runs at 6AM PST, "today" is the current date.
-    const today = new Date();
-    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    // Check if we should import games based on time
+    if (!shouldImportGames()) {
+      const currentHour = getPSTHour();
+      const dayOfWeek = getPSTDayOfWeek();
+      const dayName = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ][dayOfWeek];
+      console.log(
+        `Skipping game import: Not yet time to import games for today.`
+      );
+      console.log(`Current time (PST): ${dayName} ${currentHour}:00`);
+      console.log(`Weekdays: Games import after 2pm PST`);
+      console.log(`Weekends: Games import after 7am PST`);
+      return;
+    }
 
-    console.log(`Fetching games for today: ${dateStr}`);
+    // Get today's date in PST/PDT in YYYYMMDD format
+    // Only import games for today, not tomorrow
+    const todayPST = getPSTDate();
+    const dateStr = todayPST.replace(/-/g, "");
+
+    console.log(`Fetching games for today (PST): ${todayPST} (${dateStr})`);
     // Use hybrid approach if Odds API key is available, otherwise ESPN only
     const games = await fetchDailyGames(dateStr, ODDS_API_KEY);
     if (ODDS_API_KEY) {
@@ -411,13 +530,28 @@ async function calculateWeeklyWinner() {
     console.log(`Checking week: ${weekStart} to ${weekEnd}`);
 
     // Check if we already have a winner for this week
-    const { data: existingWinner } = await supabase
+    // Use .maybeSingle() to handle cases where no winner exists
+    // If multiple winners exist (shouldn't happen), we'll delete duplicates
+    const { data: existingWinners, error: checkError } = await supabase
       .from("weekly_winners")
       .select("id")
-      .eq("week_start", weekStart)
-      .single();
+      .eq("week_start", weekStart);
 
-    if (existingWinner) {
+    if (checkError) {
+      console.error("Error checking for existing winners:", checkError);
+      return;
+    }
+
+    if (existingWinners && existingWinners.length > 0) {
+      if (existingWinners.length > 1) {
+        console.log(
+          `Warning: Found ${existingWinners.length} winners for week ${weekStart}. Keeping first, removing duplicates.`
+        );
+        // Delete all but the first one
+        const idsToDelete = existingWinners.slice(1).map((w) => w.id);
+        await supabase.from("weekly_winners").delete().in("id", idsToDelete);
+        console.log(`Removed ${idsToDelete.length} duplicate winner(s).`);
+      }
       console.log("Weekly winner already calculated for this week.");
       return;
     }
@@ -493,6 +627,20 @@ async function calculateWeeklyWinner() {
       `Weekly winner: ${winnerId} with ${winnerWins}-${winnerLosses}`
     );
 
+    // Double-check one more time before inserting (race condition protection)
+    const { data: finalCheck } = await supabase
+      .from("weekly_winners")
+      .select("id")
+      .eq("week_start", weekStart)
+      .limit(1);
+
+    if (finalCheck && finalCheck.length > 0) {
+      console.log(
+        "Weekly winner was already added (race condition detected). Skipping insert."
+      );
+      return;
+    }
+
     // Insert weekly winner
     const { error: insertError } = await supabase
       .from("weekly_winners")
@@ -505,6 +653,14 @@ async function calculateWeeklyWinner() {
       });
 
     if (insertError) {
+      // If it's a unique constraint violation, that's okay - winner already exists
+      if (
+        insertError.code === "23505" ||
+        insertError.message.includes("unique")
+      ) {
+        console.log("Weekly winner already exists (unique constraint).");
+        return;
+      }
       console.error("Error inserting weekly winner:", insertError);
       return;
     }
