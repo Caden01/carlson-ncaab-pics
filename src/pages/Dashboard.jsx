@@ -27,9 +27,10 @@ export default function Dashboard() {
   // Use local date to avoid timezone issues (e.g. UTC is tomorrow while local is today)
   const getLocalDate = () => {
     const d = new Date();
-    const offset = d.getTimezoneOffset() * 60000;
-    const localDate = new Date(d.getTime() - offset);
-    return localDate.toISOString().split("T")[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   };
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
 
@@ -61,12 +62,33 @@ export default function Dashboard() {
         "postgres_changes",
         { event: "*", schema: "public", table: "games" },
         (payload) => {
-          // Update local state when a game changes
-          setGames((prevGames) =>
-            prevGames.map((game) =>
-              game.id === payload.new.id ? { ...game, ...payload.new } : game
-            )
-          );
+          // Handle different event types
+          if (payload.eventType === "INSERT") {
+            // Only add if it's for the selected date
+            if (payload.new.game_date === selectedDate) {
+              setGames((prevGames) => {
+                // Check if game already exists (avoid duplicates)
+                if (prevGames.some((g) => g.id === payload.new.id)) {
+                  return prevGames;
+                }
+                return [...prevGames, payload.new].sort(
+                  (a, b) => new Date(a.start_time) - new Date(b.start_time)
+                );
+              });
+            }
+          } else if (payload.eventType === "UPDATE") {
+            // Update existing game
+            setGames((prevGames) =>
+              prevGames.map((game) =>
+                game.id === payload.new.id ? { ...game, ...payload.new } : game
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            // Remove deleted game
+            setGames((prevGames) =>
+              prevGames.filter((game) => game.id !== payload.old.id)
+            );
+          }
         }
       )
       .subscribe();

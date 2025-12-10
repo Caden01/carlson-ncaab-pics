@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { fetchDailyGames } from "../src/lib/espn.js";
+import { didTeamCover } from "../src/lib/gameLogic.js";
 
 // Optional: Use The Odds API for more reliable spread data
 // Get a free API key at https://the-odds-api.com/ (500 requests/month free)
@@ -20,45 +21,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
-
-// Helper to determine if a team covered the spread
-function didTeamCover(game, teamName) {
-  if (game.status !== "finished" && game.status !== "post") return null;
-  if (!game.spread || !game.spread.includes(" ")) return null;
-
-  // Parse spread string (e.g., "KAN -5.5")
-  // Use regex to split on whitespace and filter out empty strings
-  // This handles cases with multiple spaces (e.g., "KAN  -5.5")
-  const parts = game.spread
-    .trim()
-    .split(/\s+/)
-    .filter((p) => p.length > 0);
-  // Ensure we have at least 2 parts (team abbreviation and spread value)
-  if (parts.length < 2) return null;
-
-  const spreadTeamAbbrev = parts[0];
-  // The spread value should be the last part (handles multi-word team names)
-  const spreadValue = parseFloat(parts[parts.length - 1]);
-
-  if (isNaN(spreadValue)) return null;
-
-  let isSpreadTeam = false;
-  if (game.team_a_abbrev === spreadTeamAbbrev) {
-    if (teamName === game.team_a) isSpreadTeam = true;
-  } else if (game.team_b_abbrev === spreadTeamAbbrev) {
-    if (teamName === game.team_b) isSpreadTeam = true;
-  } else {
-    return null;
-  }
-
-  const margin =
-    teamName === game.team_a
-      ? game.result_a - game.result_b
-      : game.result_b - game.result_a;
-
-  const effectiveSpread = isSpreadTeam ? spreadValue : -spreadValue;
-  return margin + effectiveSpread > 0;
-}
 
 // Format a date as YYYY-MM-DD in PST timezone (consistent across all environments)
 function formatDatePST(date) {
@@ -243,7 +205,11 @@ async function syncActiveGames() {
           // Update if status, score, spread, or details changed
           if (
             dbGame.status !==
-              (espnGame.status === "post" ? "finished" : "in_progress") ||
+              (espnGame.status === "post"
+                ? "finished"
+                : espnGame.status === "pre"
+                ? "scheduled"
+                : "in_progress") ||
             dbGame.result_a !== espnGame.result_a ||
             dbGame.result_b !== espnGame.result_b ||
             dbGame.spread !== espnGame.spread ||

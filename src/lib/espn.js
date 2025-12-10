@@ -68,33 +68,40 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
               spread_value = favoriteOdds.spread;
 
               // Determine which team is the favorite by matching the spread details
+              // Use strict matching - abbreviation must match exactly or be a word boundary match
               let favoriteAbbrev = null;
-              if (
-                spreadTeamIdentifier === awayAbbrev ||
-                (awayAbbrev &&
-                  spreadDetails.toUpperCase().includes(awayAbbrev)) ||
-                awayName.includes(spreadTeamIdentifier)
+
+              // Method 1: Exact abbreviation match (most reliable)
+              if (spreadTeamIdentifier === awayAbbrev) {
+                favoriteAbbrev = awayTeam.team.abbreviation;
+              } else if (spreadTeamIdentifier === homeAbbrev) {
+                favoriteAbbrev = homeTeam.team.abbreviation;
+              }
+              // Method 2: Check if the spread details contain the abbreviation as a standalone word
+              else if (
+                awayAbbrev &&
+                spreadDetails.toUpperCase().split(/\s+/)[0] === awayAbbrev
               ) {
                 favoriteAbbrev = awayTeam.team.abbreviation;
               } else if (
-                spreadTeamIdentifier === homeAbbrev ||
-                (homeAbbrev &&
-                  spreadDetails.toUpperCase().includes(homeAbbrev)) ||
-                homeName.includes(spreadTeamIdentifier)
+                homeAbbrev &&
+                spreadDetails.toUpperCase().split(/\s+/)[0] === homeAbbrev
               ) {
                 favoriteAbbrev = homeTeam.team.abbreviation;
-              } else {
-                // Can't match team - use original but this might be wrong
-                // Try to infer: check if we can match by partial name
-                const spreadUpper = spreadDetails.toUpperCase();
+              }
+              // Method 3: Check if first word of team name matches (for cases like "Duke -5.5")
+              else {
+                const awayFirstWord = awayName.split(" ")[0];
+                const homeFirstWord = homeName.split(" ")[0];
+                // Only match if it's a substantial match (at least 3 chars and exact match)
                 if (
-                  spreadUpper.includes(awayName.split(" ")[0]) ||
-                  awayName.includes(spreadTeamIdentifier)
+                  awayFirstWord.length >= 3 &&
+                  spreadTeamIdentifier === awayFirstWord
                 ) {
                   favoriteAbbrev = awayTeam.team.abbreviation;
                 } else if (
-                  spreadUpper.includes(homeName.split(" ")[0]) ||
-                  homeName.includes(spreadTeamIdentifier)
+                  homeFirstWord.length >= 3 &&
+                  spreadTeamIdentifier === homeFirstWord
                 ) {
                   favoriteAbbrev = homeTeam.team.abbreviation;
                 } else {
@@ -149,32 +156,39 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
                   ).toUpperCase();
                   const spreadUpper = spreadDetails.toUpperCase();
 
-                  // Match the favorite team from details
+                  // Match the favorite team from details using strict matching
                   let favoriteAbbrev = null;
-                  if (
-                    favoriteIdentifier === awayAbbrev ||
-                    (awayAbbrev && spreadUpper.includes(awayAbbrev)) ||
-                    awayName.includes(favoriteIdentifier)
+
+                  // Method 1: Exact abbreviation match (most reliable)
+                  if (favoriteIdentifier === awayAbbrev) {
+                    favoriteAbbrev = awayTeam.team.abbreviation;
+                  } else if (favoriteIdentifier === homeAbbrev) {
+                    favoriteAbbrev = homeTeam.team.abbreviation;
+                  }
+                  // Method 2: Check if first word of spread details matches abbreviation exactly
+                  else if (
+                    awayAbbrev &&
+                    spreadUpper.split(/\s+/)[0] === awayAbbrev
                   ) {
                     favoriteAbbrev = awayTeam.team.abbreviation;
                   } else if (
-                    favoriteIdentifier === homeAbbrev ||
-                    (homeAbbrev && spreadUpper.includes(homeAbbrev)) ||
-                    homeName.includes(favoriteIdentifier)
+                    homeAbbrev &&
+                    spreadUpper.split(/\s+/)[0] === homeAbbrev
                   ) {
                     favoriteAbbrev = homeTeam.team.abbreviation;
-                  } else {
-                    // Try fuzzy matching
+                  }
+                  // Method 3: Check if first word of team name matches exactly
+                  else {
                     const awayFirstWord = awayName.split(" ")[0];
                     const homeFirstWord = homeName.split(" ")[0];
                     if (
-                      spreadUpper.includes(awayFirstWord) &&
-                      awayFirstWord.length > 2
+                      awayFirstWord.length >= 3 &&
+                      favoriteIdentifier === awayFirstWord
                     ) {
                       favoriteAbbrev = awayTeam.team.abbreviation;
                     } else if (
-                      spreadUpper.includes(homeFirstWord) &&
-                      homeFirstWord.length > 2
+                      homeFirstWord.length >= 3 &&
+                      favoriteIdentifier === homeFirstWord
                     ) {
                       favoriteAbbrev = homeTeam.team.abbreviation;
                     }
@@ -202,46 +216,40 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
                   ).toUpperCase();
                   const spreadUpper = spreadDetails.toUpperCase();
 
-                  // Determine which team is the underdog by checking multiple ways
+                  // Determine which team is the underdog using strict matching
                   let isAwayUnderdog = false;
                   let isHomeUnderdog = false;
 
-                  // Method 1: Direct abbreviation match
+                  // Method 1: Direct abbreviation match (most reliable)
                   if (awayAbbrev && awayAbbrev === underdogIdentifier) {
                     isAwayUnderdog = true;
                   } else if (homeAbbrev && homeAbbrev === underdogIdentifier) {
                     isHomeUnderdog = true;
                   }
-                  // Method 2: Check if spread string contains team abbreviation
-                  else if (awayAbbrev && spreadUpper.includes(awayAbbrev)) {
+                  // Method 2: Check if first word of spread string matches abbreviation exactly
+                  else if (
+                    awayAbbrev &&
+                    spreadUpper.split(/\s+/)[0] === awayAbbrev
+                  ) {
                     isAwayUnderdog = true;
-                  } else if (homeAbbrev && spreadUpper.includes(homeAbbrev)) {
+                  } else if (
+                    homeAbbrev &&
+                    spreadUpper.split(/\s+/)[0] === homeAbbrev
+                  ) {
                     isHomeUnderdog = true;
                   }
-                  // Method 3: Check if spread string contains first word of team name
+                  // Method 3: Check if first word of team name matches exactly
                   else {
                     const awayFirstWord = awayName.split(" ")[0];
                     const homeFirstWord = homeName.split(" ")[0];
                     if (
-                      spreadUpper.includes(awayFirstWord) &&
-                      awayFirstWord.length > 2
+                      awayFirstWord.length >= 3 &&
+                      underdogIdentifier === awayFirstWord
                     ) {
                       isAwayUnderdog = true;
                     } else if (
-                      spreadUpper.includes(homeFirstWord) &&
-                      homeFirstWord.length > 2
-                    ) {
-                      isHomeUnderdog = true;
-                    }
-                    // Method 4: Check if identifier is contained in team name
-                    else if (
-                      awayName.includes(underdogIdentifier) &&
-                      underdogIdentifier.length > 1
-                    ) {
-                      isAwayUnderdog = true;
-                    } else if (
-                      homeName.includes(underdogIdentifier) &&
-                      underdogIdentifier.length > 1
+                      homeFirstWord.length >= 3 &&
+                      underdogIdentifier === homeFirstWord
                     ) {
                       isHomeUnderdog = true;
                     }

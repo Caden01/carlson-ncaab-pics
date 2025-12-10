@@ -3,18 +3,21 @@ import { supabase } from "../lib/supabase";
 import { fetchDailyGames } from "../lib/espn";
 import { didTeamCover } from "../lib/gameLogic";
 import { Loader2, RefreshCw, Download } from "lucide-react";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function Admin() {
   // Use local date
   const getLocalDate = () => {
     const d = new Date();
-    const offset = d.getTimezoneOffset() * 60000;
-    const localDate = new Date(d.getTime() - offset);
-    return localDate.toISOString().split("T")[0].replace(/-/g, "");
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}${month}${day}`;
   };
   const [date, setDate] = useState(getLocalDate());
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showRecalcConfirm, setShowRecalcConfirm] = useState(false);
 
   const handleImportGames = async () => {
     setLoading(true);
@@ -291,13 +294,6 @@ export default function Admin() {
   };
 
   const handleRecalculateStats = async () => {
-    if (
-      !confirm(
-        "Are you sure? This will reset all user stats and recalculate them based on finished games."
-      )
-    )
-      return;
-
     setLoading(true);
     setMessage("Resetting stats...");
 
@@ -391,7 +387,7 @@ export default function Admin() {
 
         <div className="mb-4">
           <button
-            onClick={handleRecalculateStats}
+            onClick={() => setShowRecalcConfirm(true)}
             disabled={loading}
             className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
           >
@@ -416,6 +412,16 @@ export default function Admin() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showRecalcConfirm}
+        onClose={() => setShowRecalcConfirm(false)}
+        onConfirm={handleRecalculateStats}
+        title="Recalculate All Stats"
+        message="This will reset all user stats and recalculate them based on finished games. This action cannot be undone."
+        confirmText="Recalculate"
+        variant="danger"
+      />
     </div>
   );
 }

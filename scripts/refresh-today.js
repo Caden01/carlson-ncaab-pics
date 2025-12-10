@@ -31,9 +31,12 @@ const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
 async function removeGamesWithoutSpread() {
   console.log("--- Removing Games Without Valid Spreads ---");
   try {
-    // Get today's date
+    // Get today's date in local timezone
     const today = new Date();
-    const todayStr = today.toISOString().split("T")[0]; // YYYY-MM-DD format
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    const todayStr = `${year}-${month}-${day}`; // YYYY-MM-DD format
 
     // Find all games for today
     const { data: todaysGames, error: fetchError } = await supabase
@@ -152,9 +155,12 @@ async function removeGamesWithoutSpread() {
 async function refreshTodaysGames() {
   console.log("--- Refreshing Today's Games ---");
   try {
-    // Get today's date in YYYYMMDD format
+    // Get today's date in YYYYMMDD format (local timezone)
     const today = new Date();
-    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    const dateStr = `${year}${month}${day}`;
 
     console.log(`Fetching games for today: ${dateStr}`);
     if (ODDS_API_KEY) {

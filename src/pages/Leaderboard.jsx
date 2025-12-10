@@ -464,8 +464,14 @@ export default function Leaderboard() {
   };
 
   // Pre-calculate all weekly records when champions section is expanded
+  // Only run when showWeeklyChampions changes or weeklyWinners loads
+  // profiles is used inside calculateWeekRecords but we don't want to re-run on every profile update
   useEffect(() => {
-    if (showWeeklyChampions && weeklyWinners.length > 0) {
+    if (
+      showWeeklyChampions &&
+      weeklyWinners.length > 0 &&
+      profiles.length > 0
+    ) {
       weeklyWinners.forEach((winner) => {
         const weekKey = `${winner.week_start}_${winner.week_end}`;
         if (!weekRecords[weekKey]) {
@@ -473,7 +479,8 @@ export default function Leaderboard() {
         }
       });
     }
-  }, [showWeeklyChampions, weeklyWinners, profiles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showWeeklyChampions, weeklyWinners.length, profiles.length]);
 
   if (loading) {
     return (
