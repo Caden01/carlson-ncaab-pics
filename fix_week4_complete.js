@@ -134,7 +134,7 @@ async function main() {
   }
 
   console.log("=== Week 4 Records ===");
-  for (const [userId, record] of Object.entries(userRecords)) {
+  for (const [, record] of Object.entries(userRecords)) {
     console.log(`  ${record.username}: ${record.wins}W - ${record.losses}L`);
   }
   console.log("");

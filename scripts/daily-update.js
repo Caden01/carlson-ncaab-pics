@@ -108,7 +108,6 @@ function getPSTHour() {
 
 // Get current day of week in PST/PDT (0 = Sunday, 6 = Saturday)
 function getPSTDayOfWeek() {
-  const now = new Date();
   // Get the date string in PST, then parse it to get the day of week
   const pstDateStr = getPSTDate();
   const [year, month, day] = pstDateStr.split("-").map(Number);
@@ -626,6 +625,32 @@ async function calculateWeeklyWinner() {
         userRecords[pick.user_id].losses++;
       }
     });
+
+    // Save ALL users' weekly records to weekly_records table (audit trail)
+    // NOTE: Season totals are updated incrementally by calculatePoints() as games finish
+    // This weekly_records table provides an audit trail to verify totals
+    console.log("Saving weekly records for all users...");
+    for (const [userId, record] of Object.entries(userRecords)) {
+      const { error: recordError } = await supabase
+        .from("weekly_records")
+        .upsert(
+          {
+            user_id: userId,
+            week_start: weekStart,
+            week_end: weekEnd,
+            wins: record.wins,
+            losses: record.losses,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,week_start" }
+        );
+
+      if (recordError) {
+        console.error(`Error saving weekly record for ${userId}:`, recordError);
+      } else {
+        console.log(`  Saved: ${userId} - ${record.wins}W-${record.losses}L`);
+      }
+    }
 
     // Find the winner (most wins, then fewest losses as tiebreaker)
     let winnerId = null;

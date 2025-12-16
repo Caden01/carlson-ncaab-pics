@@ -663,7 +663,7 @@ export default function Leaderboard() {
                       {isExpanded && allRecords.length > 0 && (
                         <div className="week-all-records">
                           <div className="week-records-header">All Players</div>
-                          {allRecords.map((record, recordIdx) => {
+                          {allRecords.map((record) => {
                             const isWinner = record.userId === winner.user_id;
                             const hasData =
                               record.wins !== null && record.losses !== null;

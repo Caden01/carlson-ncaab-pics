@@ -400,7 +400,7 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
           // Find the most common absolute spread value
           let maxCount = 0;
           let consensusSpread = null;
-          for (const [key, value] of Object.entries(spreadCounts)) {
+          for (const [, value] of Object.entries(spreadCounts)) {
             if (value.count > maxCount) {
               maxCount = value.count;
               consensusSpread = value;

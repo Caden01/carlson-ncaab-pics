@@ -17,7 +17,7 @@ export const fetchDailyGamesFromOddsApi = async (date, apiKey) => {
     const year = date.substring(0, 4);
     const month = date.substring(4, 6);
     const day = date.substring(6, 8);
-    const isoDate = `${year}-${month}-${day}`;
+    // Date formatted as ISO string for reference: ${year}-${month}-${day}
 
     // The Odds API endpoint for NCAAB
     const url = `https://api.the-odds-api.com/v4/sports/basketball_ncaab/odds/?regions=us&markets=spreads&dateFormat=iso&apiKey=${apiKey}`;
@@ -98,7 +98,7 @@ export const fetchDailyGamesFromOddsApi = async (date, apiKey) => {
             // Find the most common absolute spread value
             let maxCount = 0;
             let consensusSpread = null;
-            for (const [key, value] of Object.entries(spreadCounts)) {
+            for (const [, value] of Object.entries(spreadCounts)) {
               if (value.count > maxCount) {
                 maxCount = value.count;
                 consensusSpread = value;
