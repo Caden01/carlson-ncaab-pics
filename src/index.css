@@ -1477,6 +1477,17 @@ body {
   border-radius: 9999px;
 }
 
+.tie-badge {
+  font-size: 0.65rem;
+  color: #f59e0b;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .week-all-records {
   background: rgba(15, 23, 42, 0.7);
   border-radius: 0.5rem;

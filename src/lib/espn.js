@@ -1,4 +1,199 @@
 /**
+ * Team name aliases for matching between ESPN and Odds API
+ * All keys and values should be lowercase
+ */
+const TEAM_ALIASES = {
+  // Schools with common short/alternate names
+  duke: ["duke blue devils"],
+  "duke blue devils": ["duke"],
+  "texas tech": ["texas tech red raiders"],
+  "texas tech red raiders": ["texas tech"],
+  "north carolina": ["unc", "north carolina tar heels", "tar heels"],
+  "north carolina tar heels": ["north carolina", "unc", "tar heels"],
+  unc: ["north carolina", "north carolina tar heels"],
+  uconn: ["connecticut", "uconn huskies", "connecticut huskies"],
+  connecticut: ["uconn", "uconn huskies", "connecticut huskies"],
+  "connecticut huskies": ["uconn", "connecticut", "uconn huskies"],
+  "uconn huskies": ["uconn", "connecticut", "connecticut huskies"],
+  usc: ["southern california", "usc trojans", "southern california trojans"],
+  "southern california": ["usc", "usc trojans"],
+  "usc trojans": ["usc", "southern california"],
+  lsu: ["louisiana state", "lsu tigers"],
+  "louisiana state": ["lsu", "lsu tigers"],
+  "lsu tigers": ["lsu", "louisiana state"],
+  smu: ["southern methodist", "smu mustangs"],
+  "southern methodist": ["smu", "smu mustangs"],
+  "smu mustangs": ["smu", "southern methodist"],
+  ucf: ["central florida", "ucf knights"],
+  "central florida": ["ucf", "ucf knights"],
+  "ucf knights": ["ucf", "central florida"],
+  "ole miss": ["mississippi", "ole miss rebels"],
+  "ole miss rebels": ["ole miss", "mississippi"],
+  mississippi: ["ole miss", "ole miss rebels"],
+  "mississippi rebels": ["ole miss", "mississippi", "ole miss rebels"],
+  pitt: ["pittsburgh", "pitt panthers", "pittsburgh panthers"],
+  pittsburgh: ["pitt", "pitt panthers"],
+  "pittsburgh panthers": ["pitt", "pittsburgh"],
+  "pitt panthers": ["pitt", "pittsburgh"],
+  "miami hurricanes": ["miami", "miami fl"],
+  "st johns": ["saint johns", "st johns red storm"],
+  "saint johns": ["st johns", "st johns red storm"],
+  "st johns red storm": ["st johns", "saint johns"],
+};
+
+/**
+ * Common mascot/suffix words to strip for matching
+ */
+const MASCOT_WORDS = [
+  "blue devils",
+  "red raiders",
+  "tar heels",
+  "wildcats",
+  "tigers",
+  "bulldogs",
+  "bears",
+  "longhorns",
+  "aggies",
+  "sooners",
+  "cowboys",
+  "horned frogs",
+  "jayhawks",
+  "cyclones",
+  "mountaineers",
+  "huskies",
+  "ducks",
+  "beavers",
+  "bruins",
+  "trojans",
+  "cardinals",
+  "sun devils",
+  "buffaloes",
+  "golden bears",
+  "fighting irish",
+  "spartans",
+  "wolverines",
+  "buckeyes",
+  "hawkeyes",
+  "badgers",
+  "gophers",
+  "boilermakers",
+  "hoosiers",
+  "nittany lions",
+  "terrapins",
+  "scarlet knights",
+  "orange",
+  "cavaliers",
+  "hokies",
+  "seminoles",
+  "hurricanes",
+  "demon deacons",
+  "wolfpack",
+  "yellow jackets",
+  "eagles",
+  "owls",
+  "mustangs",
+  "horned frogs",
+  "red storm",
+  "golden eagles",
+  "pirates",
+  "musketeers",
+  "bluejays",
+  "providence friars",
+  "friars",
+  "hoyas",
+  "volunteers",
+  "rebels",
+  "commodores",
+  "razorbacks",
+  "crimson tide",
+  "gamecocks",
+  "gators",
+  "panthers",
+  "knights",
+  "bearcats",
+  "cougars",
+  "shockers",
+];
+
+/**
+ * Normalize a team name for comparison
+ */
+function normalizeTeamName(name) {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Extract the school/city name by removing mascot
+ */
+function extractSchoolName(name) {
+  let normalized = normalizeTeamName(name);
+  for (const mascot of MASCOT_WORDS) {
+    normalized = normalized
+      .replace(new RegExp(`\\s*${mascot}\\s*$`, "i"), "")
+      .trim();
+  }
+  return normalized;
+}
+
+/**
+ * Check if two team names match using multiple strategies
+ * @returns {boolean} true if teams match
+ */
+function teamsMatch(name1, name2) {
+  if (!name1 || !name2) return false;
+
+  const n1 = normalizeTeamName(name1);
+  const n2 = normalizeTeamName(name2);
+
+  // Strategy 1: Exact match
+  if (n1 === n2) return true;
+
+  // Strategy 2: School name match (without mascot) - exact match only
+  const school1 = extractSchoolName(name1);
+  const school2 = extractSchoolName(name2);
+  if (school1 && school2 && school1.length >= 4 && school1 === school2) {
+    return true;
+  }
+
+  // Strategy 3: Check aliases (both directions)
+  const aliases1 = TEAM_ALIASES[n1] || TEAM_ALIASES[school1] || [];
+  const aliases2 = TEAM_ALIASES[n2] || TEAM_ALIASES[school2] || [];
+
+  // Check if n2 matches any alias of n1
+  for (const alias of aliases1) {
+    const normalizedAlias = normalizeTeamName(alias);
+    if (normalizedAlias === n2 || normalizedAlias === school2) return true;
+  }
+  // Check if n1 matches any alias of n2
+  for (const alias of aliases2) {
+    const normalizedAlias = normalizeTeamName(alias);
+    if (normalizedAlias === n1 || normalizedAlias === school1) return true;
+  }
+
+  // Strategy 4: Two-word prefix match (e.g., "Texas Tech" matches "Texas Tech Red Raiders")
+  // Only for multi-word school names to avoid false positives
+  const words1 = n1.split(" ");
+  const words2 = n2.split(" ");
+  if (words1.length >= 2 && words2.length >= 2) {
+    const prefix1 = words1.slice(0, 2).join(" ");
+    const prefix2 = words2.slice(0, 2).join(" ");
+    if (prefix1 === prefix2) return true;
+  }
+
+  // Strategy 5: Full name contains check - but only if the shorter name is substantial
+  // and the longer name STARTS WITH the shorter name (to avoid Duke matching Duquesne)
+  if (n1.length >= 4 && n2.startsWith(n1 + " ")) return true;
+  if (n2.length >= 4 && n1.startsWith(n2 + " ")) return true;
+
+  return false;
+}
+
+/**
  * Fetches NCAAB games for a specific date from ESPN's hidden API.
  * Optionally uses The Odds API for more reliable spread data.
  *
@@ -346,8 +541,8 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
     const espnEvents = espnResponse.events || [];
     const oddsGames = oddsResponse || [];
 
-    // Create a map of Odds API games by team names (normalized)
-    const oddsMap = new Map();
+    // Process Odds API games into a list with spread data
+    const processedOddsGames = [];
     oddsGames.forEach((game) => {
       if (game.bookmakers && game.bookmakers.length > 0) {
         // Get consensus spread
@@ -370,7 +565,6 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
 
         if (spreads.length > 0) {
           // Find consensus spread (most common absolute point value)
-          // Group by absolute value since favorite has -X and underdog has +X for same game
           const spreadCounts = {};
           spreads.forEach((s) => {
             const absPoint = Math.abs(s.point);
@@ -386,11 +580,9 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
               };
             }
             if (s.point < 0) {
-              // Favorite (negative spread)
               spreadCounts[key].favoritePoint = s.point;
               spreadCounts[key].favoriteTeams.push(s.team);
             } else {
-              // Underdog (positive spread)
               spreadCounts[key].underdogPoint = s.point;
               spreadCounts[key].underdogTeams.push(s.team);
             }
@@ -408,79 +600,37 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
           }
 
           if (consensusSpread && consensusSpread.favoritePoint !== null) {
-            // Only show the favorite's spread (negative value)
             const spreadPoint = consensusSpread.favoritePoint;
-            // Find which team is the favorite (normalize names for matching)
-            const normalizeName = (name) =>
-              name.toLowerCase().replace(/\s+/g, " ").trim();
-            const awayNormalized = normalizeName(game.away_team);
-            const homeNormalized = normalizeName(game.home_team);
 
-            // Find the favorite team name from Odds API - try to match to away or home
+            // Determine which Odds API team is the favorite
             let favoriteTeamName = null;
             let isAwayFavorite = false;
             let isHomeFavorite = false;
 
-            // Try to find which team is the favorite by matching favorite team names
             for (const favoriteTeam of consensusSpread.favoriteTeams) {
-              const favoriteNormalized = normalizeName(favoriteTeam);
-
-              // Check if this favorite team matches the away team
-              if (
-                favoriteNormalized === awayNormalized ||
-                awayNormalized.includes(favoriteNormalized) ||
-                favoriteNormalized.includes(awayNormalized)
-              ) {
+              if (teamsMatch(favoriteTeam, game.away_team)) {
                 favoriteTeamName = game.away_team;
                 isAwayFavorite = true;
                 break;
               }
-              // Check if this favorite team matches the home team
-              if (
-                favoriteNormalized === homeNormalized ||
-                homeNormalized.includes(favoriteNormalized) ||
-                favoriteNormalized.includes(homeNormalized)
-              ) {
+              if (teamsMatch(favoriteTeam, game.home_team)) {
                 favoriteTeamName = game.home_team;
                 isHomeFavorite = true;
                 break;
               }
             }
 
-            // If we couldn't match, use the first favorite team name and try to infer
+            // Fallback: use first favorite team name
             if (!favoriteTeamName && consensusSpread.favoriteTeams.length > 0) {
               favoriteTeamName = consensusSpread.favoriteTeams[0];
-              const favoriteNormalized = normalizeName(favoriteTeamName);
-              // Try fuzzy matching
-              if (
-                favoriteNormalized === awayNormalized ||
-                awayNormalized.includes(favoriteNormalized) ||
-                favoriteNormalized.includes(awayNormalized)
-              ) {
+              if (teamsMatch(favoriteTeamName, game.away_team)) {
                 isAwayFavorite = true;
-              } else if (
-                favoriteNormalized === homeNormalized ||
-                homeNormalized.includes(favoriteNormalized) ||
-                favoriteNormalized.includes(homeNormalized)
-              ) {
+              } else if (teamsMatch(favoriteTeamName, game.home_team)) {
                 isHomeFavorite = true;
               }
             }
 
-            // Create keys for matching (normalize team names)
-            const key1 = `${awayNormalized}|${homeNormalized}`;
-            const key2 = `${homeNormalized}|${awayNormalized}`;
-
-            // Store which team is favorite along with Odds API team names for better matching
-            oddsMap.set(key1, {
-              spread_value: spreadPoint,
-              favoriteTeamName: favoriteTeamName,
-              isAwayFavorite: isAwayFavorite,
-              isHomeFavorite: isHomeFavorite,
-              oddsAwayTeam: game.away_team,
-              oddsHomeTeam: game.home_team,
-            });
-            oddsMap.set(key2, {
+            processedOddsGames.push({
               spread_value: spreadPoint,
               favoriteTeamName: favoriteTeamName,
               isAwayFavorite: isAwayFavorite,
@@ -509,14 +659,35 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
 
         if (!event.status?.type) return null;
 
-        // Try to find matching game in Odds API
-        const normalizeName = (name) =>
-          name.toLowerCase().replace(/\s+/g, " ").trim();
-        const espnAwayName = normalizeName(awayTeam.team.displayName);
-        const espnHomeName = normalizeName(homeTeam.team.displayName);
-        const key = `${espnAwayName}|${espnHomeName}`;
-        const oddsData =
-          oddsMap.get(key) || oddsMap.get(`${espnHomeName}|${espnAwayName}`);
+        // Try to find matching game in Odds API using improved matching
+        const espnAwayName = awayTeam.team.displayName;
+        const espnHomeName = homeTeam.team.displayName;
+
+        // Search through all odds games for a match
+        const oddsData = processedOddsGames.find((oddsGame) => {
+          // Check if both teams match (in either order for neutral site games)
+          const awayMatchesAway = teamsMatch(
+            espnAwayName,
+            oddsGame.oddsAwayTeam
+          );
+          const homeMatchesHome = teamsMatch(
+            espnHomeName,
+            oddsGame.oddsHomeTeam
+          );
+          const awayMatchesHome = teamsMatch(
+            espnAwayName,
+            oddsGame.oddsHomeTeam
+          );
+          const homeMatchesAway = teamsMatch(
+            espnHomeName,
+            oddsGame.oddsAwayTeam
+          );
+
+          return (
+            (awayMatchesAway && homeMatchesHome) ||
+            (awayMatchesHome && homeMatchesAway)
+          );
+        });
 
         // Use Odds API spread if available, otherwise fall back to ESPN
         let spread = null;
@@ -524,50 +695,26 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
 
         if (oddsData && oddsData.spread_value !== null) {
           spread_value = oddsData.spread_value;
-          // Determine which ESPN team is the favorite and use their abbreviation
-          const espnAwayNormalized = normalizeName(awayTeam.team.displayName);
-          const espnHomeNormalized = normalizeName(homeTeam.team.displayName);
-          const oddsAwayNormalized = normalizeName(oddsData.oddsAwayTeam || "");
-          const oddsHomeNormalized = normalizeName(oddsData.oddsHomeTeam || "");
-          const favoriteNormalized = normalizeName(
-            oddsData.favoriteTeamName || ""
-          );
 
-          // First, try to match ESPN teams to Odds API teams to determine which ESPN team is the favorite
+          // Determine which ESPN team is the favorite using improved matching
           let espnFavoriteIsAway = false;
           let espnFavoriteIsHome = false;
 
-          // If we have stored flags, use them but verify with team name matching
+          // Use stored flags and verify with improved team name matching
           if (oddsData.isAwayFavorite) {
-            // Verify that the Odds API away team matches an ESPN team
-            if (
-              espnAwayNormalized === oddsAwayNormalized ||
-              espnAwayNormalized.includes(oddsAwayNormalized) ||
-              oddsAwayNormalized.includes(espnAwayNormalized)
-            ) {
+            // Odds API away team is favorite - find which ESPN team it matches
+            if (teamsMatch(espnAwayName, oddsData.oddsAwayTeam)) {
               espnFavoriteIsAway = true;
-            } else if (
-              espnHomeNormalized === oddsAwayNormalized ||
-              espnHomeNormalized.includes(oddsAwayNormalized) ||
-              oddsAwayNormalized.includes(espnHomeNormalized)
-            ) {
-              // Odds API away team actually matches ESPN home team
+            } else if (teamsMatch(espnHomeName, oddsData.oddsAwayTeam)) {
+              // Odds API away team matches ESPN home team (teams swapped)
               espnFavoriteIsHome = true;
             }
           } else if (oddsData.isHomeFavorite) {
-            // Verify that the Odds API home team matches an ESPN team
-            if (
-              espnHomeNormalized === oddsHomeNormalized ||
-              espnHomeNormalized.includes(oddsHomeNormalized) ||
-              oddsHomeNormalized.includes(espnHomeNormalized)
-            ) {
+            // Odds API home team is favorite - find which ESPN team it matches
+            if (teamsMatch(espnHomeName, oddsData.oddsHomeTeam)) {
               espnFavoriteIsHome = true;
-            } else if (
-              espnAwayNormalized === oddsHomeNormalized ||
-              espnAwayNormalized.includes(oddsHomeNormalized) ||
-              oddsHomeNormalized.includes(espnAwayNormalized)
-            ) {
-              // Odds API home team actually matches ESPN away team
+            } else if (teamsMatch(espnAwayName, oddsData.oddsHomeTeam)) {
+              // Odds API home team matches ESPN away team (teams swapped)
               espnFavoriteIsAway = true;
             }
           }
@@ -576,19 +723,11 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
           if (
             !espnFavoriteIsAway &&
             !espnFavoriteIsHome &&
-            favoriteNormalized
+            oddsData.favoriteTeamName
           ) {
-            if (
-              espnAwayNormalized === favoriteNormalized ||
-              espnAwayNormalized.includes(favoriteNormalized) ||
-              favoriteNormalized.includes(espnAwayNormalized)
-            ) {
+            if (teamsMatch(espnAwayName, oddsData.favoriteTeamName)) {
               espnFavoriteIsAway = true;
-            } else if (
-              espnHomeNormalized === favoriteNormalized ||
-              espnHomeNormalized.includes(favoriteNormalized) ||
-              favoriteNormalized.includes(espnHomeNormalized)
-            ) {
+            } else if (teamsMatch(espnHomeName, oddsData.favoriteTeamName)) {
               espnFavoriteIsHome = true;
             }
           }
@@ -599,7 +738,7 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
           } else if (espnFavoriteIsHome && homeTeam.team.abbreviation) {
             spread = `${homeTeam.team.abbreviation} ${spread_value}`;
           } else {
-            // Can't determine, skip this spread
+            // Can't determine favorite, skip this spread
             spread = null;
             spread_value = null;
           }

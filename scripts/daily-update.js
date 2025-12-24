@@ -553,12 +553,10 @@ async function calculateWeeklyWinner() {
 
     console.log(`Checking week: ${weekStart} to ${weekEnd}`);
 
-    // Check if we already have a winner for this week
-    // Use .maybeSingle() to handle cases where no winner exists
-    // If multiple winners exist (shouldn't happen), we'll delete duplicates
+    // Check if we already have winners for this week
     const { data: existingWinners, error: checkError } = await supabase
       .from("weekly_winners")
-      .select("id")
+      .select("id, user_id")
       .eq("week_start", weekStart);
 
     if (checkError) {
@@ -567,16 +565,9 @@ async function calculateWeeklyWinner() {
     }
 
     if (existingWinners && existingWinners.length > 0) {
-      if (existingWinners.length > 1) {
-        console.log(
-          `Warning: Found ${existingWinners.length} winners for week ${weekStart}. Keeping first, removing duplicates.`
-        );
-        // Delete all but the first one
-        const idsToDelete = existingWinners.slice(1).map((w) => w.id);
-        await supabase.from("weekly_winners").delete().in("id", idsToDelete);
-        console.log(`Removed ${idsToDelete.length} duplicate winner(s).`);
-      }
-      console.log("Weekly winner already calculated for this week.");
+      console.log(
+        `Weekly winner(s) already calculated for this week (${existingWinners.length} winner(s)).`
+      );
       return;
     }
 
@@ -652,29 +643,35 @@ async function calculateWeeklyWinner() {
       }
     }
 
-    // Find the winner (most wins, then fewest losses as tiebreaker)
-    let winnerId = null;
-    let winnerWins = 0;
-    let winnerLosses = Infinity;
+    // Find the best record (most wins, then fewest losses)
+    let bestWins = 0;
+    let bestLosses = Infinity;
 
-    for (const [userId, record] of Object.entries(userRecords)) {
+    for (const [, record] of Object.entries(userRecords)) {
       if (
-        record.wins > winnerWins ||
-        (record.wins === winnerWins && record.losses < winnerLosses)
+        record.wins > bestWins ||
+        (record.wins === bestWins && record.losses < bestLosses)
       ) {
-        winnerId = userId;
-        winnerWins = record.wins;
-        winnerLosses = record.losses;
+        bestWins = record.wins;
+        bestLosses = record.losses;
       }
     }
 
-    if (!winnerId || winnerWins === 0) {
+    if (bestWins === 0) {
       console.log("No winner for this week (no one made picks or no wins).");
       return;
     }
 
+    // Find ALL users with the best record (handles ties)
+    const winners = [];
+    for (const [userId, record] of Object.entries(userRecords)) {
+      if (record.wins === bestWins && record.losses === bestLosses) {
+        winners.push(userId);
+      }
+    }
+
     console.log(
-      `Weekly winner: ${winnerId} with ${winnerWins}-${winnerLosses}`
+      `Best record: ${bestWins}-${bestLosses} (${winners.length} winner(s))`
     );
 
     // Double-check one more time before inserting (race condition protection)
@@ -691,47 +688,153 @@ async function calculateWeeklyWinner() {
       return;
     }
 
-    // Insert weekly winner
-    const { error: insertError } = await supabase
-      .from("weekly_winners")
-      .insert({
-        user_id: winnerId,
-        week_start: weekStart,
-        week_end: weekEnd,
-        wins: winnerWins,
-        losses: winnerLosses,
-      });
+    // Insert ALL winners (handles ties - everyone with the best record gets a win)
+    for (const winnerId of winners) {
+      const { error: insertError } = await supabase
+        .from("weekly_winners")
+        .insert({
+          user_id: winnerId,
+          week_start: weekStart,
+          week_end: weekEnd,
+          wins: bestWins,
+          losses: bestLosses,
+        });
 
-    if (insertError) {
-      // If it's a unique constraint violation, that's okay - winner already exists
-      if (
-        insertError.code === "23505" ||
-        insertError.message.includes("unique")
-      ) {
-        console.log("Weekly winner already exists (unique constraint).");
-        return;
+      if (insertError) {
+        // If it's a unique constraint violation, that's okay - winner already exists
+        if (
+          insertError.code === "23505" ||
+          insertError.message.includes("unique")
+        ) {
+          console.log(
+            `Weekly winner ${winnerId} already exists (unique constraint).`
+          );
+          continue;
+        }
+        console.error(
+          `Error inserting weekly winner ${winnerId}:`,
+          insertError
+        );
+        continue;
       }
-      console.error("Error inserting weekly winner:", insertError);
+
+      console.log(`  Recorded winner: ${winnerId} (${bestWins}-${bestLosses})`);
+
+      // Increment weekly_wins on the winner's profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("weekly_wins")
+        .eq("id", winnerId)
+        .single();
+
+      if (profile) {
+        await supabase
+          .from("profiles")
+          .update({ weekly_wins: (profile.weekly_wins || 0) + 1 })
+          .eq("id", winnerId);
+      }
+    }
+
+    console.log(
+      `Weekly winner(s) recorded successfully! (${winners.length} winner(s))`
+    );
+  } catch (error) {
+    console.error("Error calculating weekly winner:", error);
+  }
+}
+
+async function recalculateSeasonTotals() {
+  console.log("--- Recalculating Season Totals ---");
+  try {
+    // Get all profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, username, total_wins, total_losses, weekly_wins");
+
+    if (profilesError) throw profilesError;
+    if (!profiles || profiles.length === 0) {
+      console.log("No profiles found.");
       return;
     }
 
-    // Increment weekly_wins on the winner's profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("weekly_wins")
-      .eq("id", winnerId)
-      .single();
+    for (const profile of profiles) {
+      // Calculate totals from weekly_records
+      const { data: weeklyRecords, error: recordsError } = await supabase
+        .from("weekly_records")
+        .select("wins, losses")
+        .eq("user_id", profile.id);
 
-    if (profile) {
-      await supabase
-        .from("profiles")
-        .update({ weekly_wins: (profile.weekly_wins || 0) + 1 })
-        .eq("id", winnerId);
+      if (recordsError) {
+        console.error(
+          `Error fetching weekly records for ${profile.username}:`,
+          recordsError
+        );
+        continue;
+      }
+
+      const totalWins = (weeklyRecords || []).reduce(
+        (sum, r) => sum + (r.wins || 0),
+        0
+      );
+      const totalLosses = (weeklyRecords || []).reduce(
+        (sum, r) => sum + (r.losses || 0),
+        0
+      );
+
+      // Count weekly wins from weekly_winners
+      const { data: weeklyWins, error: winsError } = await supabase
+        .from("weekly_winners")
+        .select("id")
+        .eq("user_id", profile.id);
+
+      if (winsError) {
+        console.error(
+          `Error fetching weekly wins for ${profile.username}:`,
+          winsError
+        );
+        continue;
+      }
+
+      const weeklyWinsCount = weeklyWins?.length || 0;
+
+      // Check if update is needed
+      if (
+        profile.total_wins !== totalWins ||
+        profile.total_losses !== totalLosses ||
+        profile.weekly_wins !== weeklyWinsCount
+      ) {
+        console.log(`Updating ${profile.username}:`);
+        console.log(`  Wins: ${profile.total_wins} -> ${totalWins}`);
+        console.log(`  Losses: ${profile.total_losses} -> ${totalLosses}`);
+        console.log(
+          `  Weekly Wins: ${profile.weekly_wins} -> ${weeklyWinsCount}`
+        );
+
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
+            total_wins: totalWins,
+            total_losses: totalLosses,
+            total_points: totalWins,
+            weekly_wins: weeklyWinsCount,
+          })
+          .eq("id", profile.id);
+
+        if (updateError) {
+          console.error(`Error updating ${profile.username}:`, updateError);
+        } else {
+          console.log(`  ✓ Updated successfully`);
+        }
+      } else {
+        console.log(
+          `${profile.username}: ${totalWins}-${totalLosses} (${weeklyWinsCount} weekly wins) - OK`
+        );
+      }
     }
 
-    console.log("Weekly winner recorded successfully!");
+    console.log("Season totals recalculation complete.");
   } catch (error) {
-    console.error("Error calculating weekly winner:", error);
+    console.error("Error recalculating season totals:", error);
   }
 }
 
@@ -739,6 +842,7 @@ async function main() {
   await syncActiveGames();
   await importTodaysGames();
   await calculateWeeklyWinner();
+  await recalculateSeasonTotals();
 }
 
 main();

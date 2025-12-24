@@ -84,31 +84,35 @@ export default function Leaderboard() {
       setProfiles(profilesData || []);
 
       // Fetch weekly winners history
-      // Handle duplicates by grouping by week_start and taking the first (earliest) entry
+      // Group by week_start to handle ties (multiple winners per week)
       const { data: winnersData } = await supabase
         .from("weekly_winners")
         .select("*, profiles(username, email)")
-        .order("created_at", { ascending: true });
+        .order("week_start", { ascending: false });
 
-      // Filter out duplicates - keep only the first winner (earliest created_at) for each week
-      // Then sort by week_start descending for display
-      const uniqueWinners = [];
-      const seenWeeks = new Set();
+      // Group winners by week (to handle ties - multiple winners with same record)
+      const weekGroups = {};
       if (winnersData) {
         for (const winner of winnersData) {
-          if (!seenWeeks.has(winner.week_start)) {
-            seenWeeks.add(winner.week_start);
-            uniqueWinners.push(winner);
+          if (!weekGroups[winner.week_start]) {
+            weekGroups[winner.week_start] = {
+              week_start: winner.week_start,
+              week_end: winner.week_end,
+              wins: winner.wins,
+              losses: winner.losses,
+              winners: [],
+            };
           }
+          weekGroups[winner.week_start].winners.push(winner);
         }
       }
 
-      // Sort by week_start descending for display (most recent first)
-      uniqueWinners.sort((a, b) => {
+      // Convert to array sorted by week_start descending (most recent first)
+      const groupedWinners = Object.values(weekGroups).sort((a, b) => {
         return new Date(b.week_start) - new Date(a.week_start);
       });
 
-      setWeeklyWinners(uniqueWinners);
+      setWeeklyWinners(groupedWinners);
 
       // Calculate records based on active tab
       await calculateRecords(profilesData || [], activeTab);
@@ -586,72 +590,77 @@ export default function Leaderboard() {
             </button>
             {showWeeklyChampions && (
               <div className="weekly-winners-list">
-                {weeklyWinners.map((winner, idx) => {
-                  const weekKey = `${winner.week_start}_${winner.week_end}`;
+                {weeklyWinners.map((weekData, idx) => {
+                  const weekKey = `${weekData.week_start}_${weekData.week_end}`;
                   const isExpanded = expandedWeek === weekKey;
                   const allRecords = weekRecords[weekKey] || [];
-                  // Get the winner's weekly record from calculated records, or use stored value as fallback
-                  const winnerRecord = allRecords.find(
-                    (r) => r.userId === winner.user_id
-                  ) || {
-                    wins:
-                      winner.wins !== null && winner.wins !== undefined
-                        ? winner.wins
-                        : 0,
-                    losses:
-                      winner.losses !== null && winner.losses !== undefined
-                        ? winner.losses
-                        : 0,
-                  };
+                  const winnerIds = new Set(
+                    weekData.winners.map((w) => w.user_id)
+                  );
+                  const isTie = weekData.winners.length > 1;
 
                   return (
-                    <div key={winner.id} className="weekly-winner-container">
+                    <div key={weekKey} className="weekly-winner-container">
                       <button
                         className="weekly-winner-item clickable"
-                        onClick={() => handleWeekClick(winner)}
+                        onClick={() => handleWeekClick(weekData)}
                       >
                         <div className="winner-week">
                           Week {weeklyWinners.length - idx}:{" "}
                           {new Date(
-                            winner.week_start + "T00:00:00"
+                            weekData.week_start + "T00:00:00"
                           ).toLocaleDateString(undefined, {
                             month: "short",
                             day: "numeric",
                           })}
                           {" - "}
                           {new Date(
-                            winner.week_end + "T00:00:00"
+                            weekData.week_end + "T00:00:00"
                           ).toLocaleDateString(undefined, {
                             month: "short",
                             day: "numeric",
                           })}
                         </div>
                         <div className="winner-info">
-                          <div
-                            className="winner-avatar"
-                            style={{
-                              background: getAvatarGradient(
+                          {/* Show all winners (handles ties) */}
+                          {weekData.winners.map((winner, winnerIdx) => (
+                            <div
+                              key={winner.id}
+                              className="winner-avatar"
+                              style={{
+                                background: getAvatarGradient(
+                                  winner.profiles?.username ||
+                                    winner.profiles?.email ||
+                                    "U"
+                                ),
+                                marginLeft: winnerIdx > 0 ? "-8px" : "0",
+                                zIndex: weekData.winners.length - winnerIdx,
+                              }}
+                            >
+                              {(
                                 winner.profiles?.username ||
-                                  winner.profiles?.email ||
-                                  "U"
-                              ),
-                            }}
-                          >
-                            {(
-                              winner.profiles?.username ||
-                              winner.profiles?.email ||
-                              "U"
-                            )
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
+                                winner.profiles?.email ||
+                                "U"
+                              )
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
+                          ))}
                           <span className="winner-name">
-                            {winner.profiles?.username ||
-                              winner.profiles?.email}
+                            {isTie
+                              ? weekData.winners
+                                  .map(
+                                    (w) =>
+                                      w.profiles?.username || w.profiles?.email
+                                  )
+                                  .join(" & ")
+                              : weekData.winners[0]?.profiles?.username ||
+                                weekData.winners[0]?.profiles?.email}
                           </span>
                           <span className="winner-record">
-                            {winnerRecord.wins}-{winnerRecord.losses}
+                            {weekData.wins}-{weekData.losses}
                           </span>
+                          {isTie && <span className="tie-badge">TIE</span>}
                           <ChevronDown
                             size={16}
                             className={`chevron-icon ${
@@ -664,7 +673,7 @@ export default function Leaderboard() {
                         <div className="week-all-records">
                           <div className="week-records-header">All Players</div>
                           {allRecords.map((record) => {
-                            const isWinner = record.userId === winner.user_id;
+                            const isWinner = winnerIds.has(record.userId);
                             const hasData =
                               record.wins !== null && record.losses !== null;
                             return (
