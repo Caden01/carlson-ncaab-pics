@@ -68,7 +68,8 @@ export default function Leaderboard() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab, selectedDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedDate]); // fetchData intentionally excluded - it would cause infinite loops
 
   const fetchData = async () => {
     try {

@@ -303,34 +303,38 @@ async function refreshTodaysGames() {
           );
         }
       } else {
-        // Update existing game if spread or status changed
-        const needsUpdate =
-          existing.spread !== game.spread ||
-          existing.status !==
-            (game.status === "pre"
-              ? "scheduled"
-              : game.status === "post"
-              ? "finished"
-              : "in_progress");
+        // Update existing game - but do NOT update spread (should be locked in at import)
+        const newStatus =
+          game.status === "pre"
+            ? "scheduled"
+            : game.status === "post"
+            ? "finished"
+            : "in_progress";
 
-        if (needsUpdate) {
+        // Only update if status changed (we don't change spreads after import)
+        const needsUpdate = existing.status !== newStatus;
+
+        // Build update object - never update spread unless it's missing (backfill case)
+        const updateData = {
+          status: newStatus,
+          result_a: game.result_a,
+          result_b: game.result_b,
+          team_a_record: game.team_a_record,
+          team_a_rank: game.team_a_rank,
+          team_b_record: game.team_b_record,
+          team_b_rank: game.team_b_rank,
+        };
+
+        // Only backfill spread if game was imported without one
+        if (!existing.spread && game.spread) {
+          updateData.spread = game.spread;
+          console.log(`  Backfilling spread for ${game.team_a} vs ${game.team_b}: ${game.spread}`);
+        }
+
+        if (needsUpdate || (!existing.spread && game.spread)) {
           const { error: updateError } = await supabase
             .from("games")
-            .update({
-              spread: game.spread,
-              status:
-                game.status === "pre"
-                  ? "scheduled"
-                  : game.status === "post"
-                  ? "finished"
-                  : "in_progress",
-              result_a: game.result_a,
-              result_b: game.result_b,
-              team_a_record: game.team_a_record,
-              team_a_rank: game.team_a_rank,
-              team_b_record: game.team_b_record,
-              team_b_rank: game.team_b_rank,
-            })
+            .update(updateData)
             .eq("id", existing.id);
 
           if (updateError) {
@@ -346,7 +350,7 @@ async function refreshTodaysGames() {
           } else {
             updatedCount++;
             console.log(
-              `✓ Updated: ${game.team_a} vs ${game.team_b} (Spread: ${game.spread})`
+              `✓ Updated: ${game.team_a} vs ${game.team_b} (Status: ${newStatus})`
             );
           }
         }

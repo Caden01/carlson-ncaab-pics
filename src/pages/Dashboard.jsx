@@ -32,6 +32,23 @@ export default function Dashboard() {
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
+
+  // Check if we should import games based on current time (PST)
+  // Only import after 7am PST
+  const shouldImportGames = () => {
+    const now = new Date();
+    // Get hour in PST
+    const pstHour = parseInt(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles",
+        hour: "numeric",
+        hour12: false,
+      }).format(now),
+      10
+    );
+    return pstHour >= 7;
+  };
+
   const [selectedDate, setSelectedDate] = useState(getLocalDate());
 
   // Track games in a ref for the polling interval (avoids stale closure issues)
@@ -109,7 +126,8 @@ export default function Dashboard() {
       supabase.removeChannel(subscription);
       clearInterval(interval);
     };
-  }, [user, selectedDate]); // Removed games.length - it was causing an infinite loop!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedDate]); // fetchGamesAndPicks, isAdmin, syncLiveScores intentionally excluded to prevent infinite loops
 
   const fetchGamesAndPicks = async () => {
     try {
@@ -125,12 +143,15 @@ export default function Dashboard() {
 
       let finalGamesData = gamesData || [];
 
-      // Auto-import if no games found, but ONLY for today or past dates (not future)
+      // Auto-import if no games found, but ONLY:
+      // 1. For today or past dates (not future)
+      // 2. After the designated import time (2pm weekdays, 7am weekends PST)
       if (finalGamesData.length === 0) {
         const today = getLocalDate();
         const isFutureDate = selectedDate > today;
+        const isImportTime = shouldImportGames();
 
-        if (!isFutureDate) {
+        if (!isFutureDate && isImportTime) {
           console.log("No games found in DB, attempting auto-import...");
           const dateStr = selectedDate.replace(/-/g, "");
           const importedCount = await importGamesForDate(dateStr);
@@ -147,8 +168,10 @@ export default function Dashboard() {
               finalGamesData = refetchedGames;
             }
           }
-        } else {
+        } else if (isFutureDate) {
           console.log("Not auto-importing for future date:", selectedDate);
+        } else {
+          console.log("Not auto-importing yet - waiting for import time (7am PST)");
         }
       }
 
@@ -255,9 +278,11 @@ export default function Dashboard() {
               updates.team_b_abbrev = espnGame.team_b_abbrev;
             }
 
-            if (espnGame.spread) {
-              updates.spread = espnGame.spread;
-            }
+            // IMPORTANT: Do NOT update spread - it should be locked at import time
+            // Only backfill if game somehow has no spread
+            // if (!dbGame.spread && espnGame.spread) {
+            //   updates.spread = espnGame.spread;
+            // }
 
             const { error: updateError } = await supabase
               .from("games")

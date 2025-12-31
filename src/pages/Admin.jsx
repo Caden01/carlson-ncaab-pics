@@ -195,8 +195,9 @@ export default function Admin() {
                 updates.team_b_abbrev = espnGame.team_b_abbrev;
               }
 
-              // Only update spread if it's available from ESPN (to avoid overwriting with null)
-              if (espnGame.spread) {
+              // IMPORTANT: Do NOT update spread - it should be locked at import time
+              // Only backfill if game somehow has no spread
+              if (!dbGame.spread && espnGame.spread) {
                 updates.spread = espnGame.spread;
               }
 

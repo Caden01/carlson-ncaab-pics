@@ -14,7 +14,8 @@ export default function Profile() {
     if (user) {
       getProfile();
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // getProfile intentionally excluded - only need to fetch on user change
 
   const getProfile = async () => {
     try {

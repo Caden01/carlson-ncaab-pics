@@ -2,10 +2,8 @@ name: Daily Game Update
 
 on:
   schedule:
-    # Weekdays (Mon-Fri): Runs at 22:00 UTC, which is 2:00 PM PST (Standard Time) or 3:00 PM PDT (Daylight Time)
-    - cron: "0 22 * * 1-5"
-    # Weekends (Sat-Sun): Runs at 15:00 UTC, which is 7:00 AM PST (Standard Time) or 8:00 AM PDT (Daylight Time)
-    - cron: "0 15 * * 0,6"
+    # Runs daily at 15:00 UTC, which is 7:00 AM PST (Standard Time) or 8:00 AM PDT (Daylight Time)
+    - cron: "0 15 * * *"
   workflow_dispatch: # Allows manual triggering
 
 jobs:

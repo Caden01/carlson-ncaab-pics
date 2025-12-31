@@ -116,25 +116,10 @@ function getPSTDayOfWeek() {
 }
 
 // Check if we should import games based on current time
-// Weekdays: Only after 2pm PST (14:00)
-// Weekends: Only after 7am PST (07:00)
+// Only import after 7am PST
 function shouldImportGames() {
   const pstHour = getPSTHour();
-  const dayOfWeek = getPSTDayOfWeek(); // 0 = Sunday, 6 = Saturday
-
-  // Weekdays (Monday=1 to Friday=5)
-  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-    // Must be 14:00 PST (2pm) or later
-    return pstHour >= 14;
-  }
-
-  // Weekends (Saturday=6, Sunday=0)
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    // Must be 07:00 PST (7am) or later
-    return pstHour >= 7;
-  }
-
-  return false;
+  return pstHour >= 7;
 }
 
 async function syncActiveGames() {
@@ -201,7 +186,7 @@ async function syncActiveGames() {
             }
           }
 
-          // Update if status, score, spread, or details changed
+          // Update if status, score, or rankings changed (NOT spread - spread is locked at import)
           if (
             dbGame.status !==
               (espnGame.status === "post"
@@ -211,7 +196,6 @@ async function syncActiveGames() {
                 : "in_progress") ||
             dbGame.result_a !== espnGame.result_a ||
             dbGame.result_b !== espnGame.result_b ||
-            dbGame.spread !== espnGame.spread ||
             dbGame.team_a_rank !== espnGame.team_a_rank ||
             dbGame.team_b_rank !== espnGame.team_b_rank
           ) {
@@ -243,9 +227,12 @@ async function syncActiveGames() {
               updates.team_b_abbrev = espnGame.team_b_abbrev;
             }
 
-            // Only update spread if it's available from ESPN
-            if (espnGame.spread) {
+            // IMPORTANT: Do NOT update spread on existing games
+            // Spreads should be locked in at import time
+            // Only update spread if game doesn't have one yet (backfill case)
+            if (!dbGame.spread && espnGame.spread) {
               updates.spread = espnGame.spread;
+              console.log(`  Backfilling spread for ${dbGame.team_a} vs ${dbGame.team_b}: ${espnGame.spread}`);
             }
 
             const { error: updateError } = await supabase
@@ -425,8 +412,7 @@ async function importTodaysGames() {
         `Skipping game import: Not yet time to import games for today.`
       );
       console.log(`Current time (PST): ${dayName} ${currentHour}:00`);
-      console.log(`Weekdays: Games import after 2pm PST`);
-      console.log(`Weekends: Games import after 7am PST`);
+      console.log(`Games import after 7am PST`);
       return;
     }
 
