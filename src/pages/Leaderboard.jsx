@@ -25,6 +25,7 @@ export default function Leaderboard() {
   const [showWeeklyChampions, setShowWeeklyChampions] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [weekRecords, setWeekRecords] = useState({});
+  const MAX_CACHED_WEEKS = 10; // Limit memory usage
 
   // Format date as YYYY-MM-DD in local timezone
   const formatLocalDate = (date) => {
@@ -275,6 +276,20 @@ export default function Leaderboard() {
     return 0;
   };
 
+  // Helper to update weekRecords with size limit (LRU-style eviction)
+  const updateWeekRecordsCache = (weekKey, records) => {
+    setWeekRecords((prev) => {
+      const keys = Object.keys(prev);
+      // If we're at the limit and this is a new key, remove the oldest entry
+      if (keys.length >= MAX_CACHED_WEEKS && !prev[weekKey]) {
+        const oldestKey = keys[0]; // First key is oldest (object insertion order)
+        const { [oldestKey]: _, ...rest } = prev;
+        return { ...rest, [weekKey]: records };
+      }
+      return { ...prev, [weekKey]: records };
+    });
+  };
+
   const calculateWeekRecords = async (weekStart, weekEnd) => {
     // Check if we already have this week's records cached
     const weekKey = `${weekStart}_${weekEnd}`;
@@ -335,7 +350,7 @@ export default function Leaderboard() {
           return (a.username || "").localeCompare(b.username || "");
         });
 
-      setWeekRecords((prev) => ({ ...prev, [weekKey]: records }));
+      updateWeekRecordsCache(weekKey, records);
       return records;
     }
 
@@ -393,7 +408,7 @@ export default function Leaderboard() {
               return (a.username || "").localeCompare(b.username || "");
             });
 
-          setWeekRecords((prev) => ({ ...prev, [weekKey]: records }));
+          updateWeekRecordsCache(weekKey, records);
           return records;
         }
         return [];
@@ -450,7 +465,7 @@ export default function Leaderboard() {
         return a.losses - b.losses;
       });
 
-      setWeekRecords((prev) => ({ ...prev, [weekKey]: records }));
+      updateWeekRecordsCache(weekKey, records);
       return records;
     } catch (error) {
       console.error("Error calculating week records:", error);
@@ -517,14 +532,22 @@ export default function Leaderboard() {
         <div className="leaderboard-tabs">
           <button
             className={`tab-btn ${activeTab === "daily" ? "active" : ""}`}
-            onClick={() => setActiveTab("daily")}
+            onClick={() => {
+              setActiveTab("daily");
+              setWeekRecords({}); // Clear cache when leaving season tab
+              setExpandedWeek(null);
+            }}
           >
             <Calendar size={16} />
             <span>Daily</span>
           </button>
           <button
             className={`tab-btn ${activeTab === "week" ? "active" : ""}`}
-            onClick={() => setActiveTab("week")}
+            onClick={() => {
+              setActiveTab("week");
+              setWeekRecords({}); // Clear cache when leaving season tab
+              setExpandedWeek(null);
+            }}
           >
             <CalendarDays size={16} />
             <span>Week</span>

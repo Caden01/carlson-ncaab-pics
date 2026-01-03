@@ -10,11 +10,28 @@ DROP POLICY IF EXISTS "Users can update their own picks or admins can update for
 DROP POLICY IF EXISTS "Conditional visibility for picks" ON picks;
 DROP POLICY IF EXISTS "Enable read access for all users" ON picks;
 DROP POLICY IF EXISTS "Admins can select all picks" ON picks;
+DROP POLICY IF EXISTS "Anyone can view all picks" ON picks;
+DROP POLICY IF EXISTS "Users can view picks conditionally" ON picks;
+DROP POLICY IF EXISTS "Users or admins can insert picks" ON picks;
+DROP POLICY IF EXISTS "Users or admins can update picks" ON picks;
+DROP POLICY IF EXISTS "Users or admins can delete picks" ON picks;
 
--- 1. SELECT: Everyone can view all picks (needed for seeing other players' picks)
-CREATE POLICY "Anyone can view all picks"
+-- 1. SELECT: Users can see picks if:
+--    a) It's their own pick, OR
+--    b) The game has already started (past start_time)
+CREATE POLICY "Users can view picks conditionally"
   ON picks FOR SELECT
-  USING (true);
+  USING (
+    -- Always see your own picks
+    auth.uid() = user_id
+    OR
+    -- Game has already started (locked) - everyone sees all picks
+    EXISTS (
+      SELECT 1 FROM games
+      WHERE games.id = picks.game_id
+      AND games.start_time <= NOW()
+    )
+  );
 
 -- 2. INSERT: Users can insert their own picks, OR admins can insert for anyone
 CREATE POLICY "Users or admins can insert picks"

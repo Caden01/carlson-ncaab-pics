@@ -73,7 +73,7 @@ export default function Dashboard() {
     }
 
     // Real-time subscription for game updates
-    const subscription = supabase
+    const gamesSubscription = supabase
       .channel("public:games")
       .on(
         "postgres_changes",
@@ -100,11 +100,49 @@ export default function Dashboard() {
                 game.id === payload.new.id ? { ...game, ...payload.new } : game
               )
             );
+            // If a game just started or finished, re-fetch picks (visibility may have changed)
+            const oldStatus = payload.old?.status;
+            const newStatus = payload.new?.status;
+            if (oldStatus !== newStatus && (newStatus === "in_progress" || newStatus === "finished")) {
+              fetchPicksForGames([payload.new.id]);
+            }
           } else if (payload.eventType === "DELETE") {
             // Remove deleted game
             setGames((prevGames) =>
               prevGames.filter((game) => game.id !== payload.old.id)
             );
+          }
+        }
+      )
+      .subscribe();
+
+    // Real-time subscription for picks updates (see other users' picks after game starts)
+    const picksSubscription = supabase
+      .channel("public:picks")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "picks" },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const pick = payload.new;
+            // Only update if this pick is for a game we're displaying
+            setGames((prevGames) => {
+              const gameExists = prevGames.some((g) => g.id === pick.game_id);
+              if (gameExists) {
+                // Re-fetch picks for this game to get proper profile data
+                fetchPicksForGames([pick.game_id]);
+              }
+              return prevGames;
+            });
+          } else if (payload.eventType === "DELETE") {
+            const pick = payload.old;
+            setPicks((prev) => {
+              const gamePicks = prev[pick.game_id] || [];
+              return {
+                ...prev,
+                [pick.game_id]: gamePicks.filter((p) => p.user_id !== pick.user_id),
+              };
+            });
           }
         }
       )
@@ -123,7 +161,8 @@ export default function Dashboard() {
     }, 60000); // Check every minute
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(gamesSubscription);
+      supabase.removeChannel(picksSubscription);
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,6 +264,45 @@ export default function Dashboard() {
       setAllProfiles(data || []);
     } catch (error) {
       console.error("Error fetching profiles:", error);
+    }
+  };
+
+  // Helper to fetch picks for specific games (used by real-time updates)
+  const fetchPicksForGames = async (gameIds) => {
+    if (!gameIds || gameIds.length === 0) return;
+
+    try {
+      const { data: picksData, error: picksError } = await supabase
+        .from("picks")
+        .select("game_id, selected_team, user_id, profiles(username, email)")
+        .in("game_id", gameIds);
+
+      if (picksError) {
+        console.error("Error fetching picks:", picksError);
+        return;
+      }
+
+      // Update picks state for these games
+      setPicks((prev) => {
+        const newPicks = { ...prev };
+        // Clear existing picks for these games first
+        gameIds.forEach((id) => {
+          newPicks[id] = [];
+        });
+        // Add fetched picks
+        (picksData || []).forEach((pick) => {
+          if (!newPicks[pick.game_id]) {
+            newPicks[pick.game_id] = [];
+          }
+          newPicks[pick.game_id].push({
+            ...pick,
+            username: pick.profiles?.username || pick.profiles?.email || "Unknown",
+          });
+        });
+        return newPicks;
+      });
+    } catch (error) {
+      console.error("Error in fetchPicksForGames:", error);
     }
   };
 

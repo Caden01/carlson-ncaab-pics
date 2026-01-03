@@ -167,7 +167,6 @@ export default function Admin() {
               dbGame.status !== newStatus ||
               dbGame.result_a !== espnGame.result_a ||
               dbGame.result_b !== espnGame.result_b ||
-              dbGame.spread !== espnGame.spread ||
               dbGame.team_a_record !== espnGame.team_a_record ||
               dbGame.team_b_record !== espnGame.team_b_record
             ) {

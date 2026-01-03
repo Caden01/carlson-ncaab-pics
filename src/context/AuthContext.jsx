@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
         .maybeSingle();
 
       if (!error && data) {
-        setIsAdmin(data.is_admin);
+        setIsAdmin(data.is_admin === true);
       }
     } catch (error) {
       console.error("Error checking admin status:", error);
