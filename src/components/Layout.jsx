@@ -2,12 +2,16 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Trophy, LogOut, User, Menu, X, Settings } from "lucide-react";
 import { useState } from "react";
+import { useScrollRestoration } from "../lib/useScrollRestoration";
 
 export default function Layout() {
   const { user, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Save and restore scroll position when navigating away and back
+  useScrollRestoration();
 
   const handleSignOut = async () => {
     await signOut();

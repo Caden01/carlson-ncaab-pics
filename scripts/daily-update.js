@@ -229,11 +229,7 @@ async function syncActiveGames() {
 
             // IMPORTANT: Do NOT update spread on existing games
             // Spreads should be locked in at import time
-            // Only update spread if game doesn't have one yet (backfill case)
-            if (!dbGame.spread && espnGame.spread) {
-              updates.spread = espnGame.spread;
-              console.log(`  Backfilling spread for ${dbGame.team_a} vs ${dbGame.team_b}: ${espnGame.spread}`);
-            }
+            // Games without spreads at import time are intentionally left without spreads
 
             const { error: updateError } = await supabase
               .from("games")

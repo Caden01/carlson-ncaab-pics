@@ -88,9 +88,13 @@ export default function Dashboard() {
                 if (prevGames.some((g) => g.id === payload.new.id)) {
                   return prevGames;
                 }
-                return [...prevGames, payload.new].sort(
-                  (a, b) => new Date(a.start_time) - new Date(b.start_time)
-                );
+                return [...prevGames, payload.new].sort((a, b) => {
+                  // Primary sort: start_time
+                  const timeDiff = new Date(a.start_time) - new Date(b.start_time);
+                  if (timeDiff !== 0) return timeDiff;
+                  // Secondary sort: id (preserves import order)
+                  return a.id - b.id;
+                });
               });
             }
           } else if (payload.eventType === "UPDATE") {
@@ -176,7 +180,8 @@ export default function Dashboard() {
         .from("games")
         .select("*")
         .eq("game_date", selectedDate)
-        .order("start_time", { ascending: true });
+        .order("start_time", { ascending: true })
+        .order("id", { ascending: true });
 
       if (gamesError) throw gamesError;
 
@@ -184,15 +189,24 @@ export default function Dashboard() {
 
       // Auto-import if no games found, but ONLY:
       // 1. For today or past dates (not future)
-      // 2. After the designated import time (2pm weekdays, 7am weekends PST)
+      // 2. After the designated import time (7am PST)
+      // 3. Import has not already been attempted for this date (once per day only)
       if (finalGamesData.length === 0) {
         const today = getLocalDate();
         const isFutureDate = selectedDate > today;
         const isImportTime = shouldImportGames();
+        
+        // Check if we've already attempted import for this date today
+        const importKey = `games-imported-${selectedDate}`;
+        const alreadyImported = localStorage.getItem(importKey);
 
-        if (!isFutureDate && isImportTime) {
-          console.log("No games found in DB, attempting auto-import...");
+        if (!isFutureDate && isImportTime && !alreadyImported) {
+          console.log("No games found in DB, attempting auto-import (once per day)...");
           const dateStr = selectedDate.replace(/-/g, "");
+          
+          // Mark as imported BEFORE attempting (so we don't retry on failure)
+          localStorage.setItem(importKey, new Date().toISOString());
+          
           const importedCount = await importGamesForDate(dateStr);
 
           if (importedCount > 0) {
@@ -201,14 +215,19 @@ export default function Dashboard() {
               .from("games")
               .select("*")
               .eq("game_date", selectedDate)
-              .order("start_time", { ascending: true });
+              .order("start_time", { ascending: true })
+              .order("id", { ascending: true });
 
             if (refetchedGames) {
               finalGamesData = refetchedGames;
             }
           }
+          
+          console.log(`Import complete: ${importedCount} games imported for ${selectedDate}`);
         } else if (isFutureDate) {
           console.log("Not auto-importing for future date:", selectedDate);
+        } else if (alreadyImported) {
+          console.log(`Import already attempted for ${selectedDate} at ${alreadyImported}`);
         } else {
           console.log("Not auto-importing yet - waiting for import time (7am PST)");
         }
