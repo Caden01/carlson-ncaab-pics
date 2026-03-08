@@ -150,6 +150,9 @@ body {
 }
 
 .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   color: var(--text-muted);
   text-decoration: none;
   font-weight: 500;
@@ -158,6 +161,10 @@ body {
 
 .nav-link:hover {
   color: var(--primary);
+}
+
+.nav-link.active {
+  color: var(--text-main);
 }
 
 .user-menu {
@@ -251,6 +258,10 @@ body {
   max-width: 80rem;
   margin: 0 auto;
   padding: 2rem 1rem;
+  width: 100%;
+}
+
+.full-width-content {
   width: 100%;
 }
 
@@ -1626,4 +1637,675 @@ body {
     rgba(234, 179, 8, 0.1),
     rgba(234, 179, 8, 0.05)
   );
+}
+
+/* Season Recap */
+.recap-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 32%),
+    linear-gradient(180deg, #020617 0%, #0f172a 38%, #020617 100%);
+  padding: 1rem;
+}
+
+.recap-page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recap-content {
+  max-width: 78rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.recap-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.recap-hero-copy,
+.recap-hero-panel,
+.recap-overview-card,
+.recap-player-card,
+.recap-error-banner,
+.recap-empty-state {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 24px 48px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(14px);
+}
+
+.recap-hero-copy {
+  border-radius: 1.5rem;
+  padding: 1.8rem;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.recap-hero-copy::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -35% auto;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.22), transparent 65%);
+  pointer-events: none;
+}
+
+.recap-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.22);
+  color: #fdba74;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recap-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.recap-hero-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  box-shadow: 0 12px 30px rgba(249, 115, 22, 0.3);
+}
+
+.recap-title {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #f8fafc;
+}
+
+.recap-subtitle {
+  margin: 1rem 0 0;
+  max-width: 44rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #cbd5e1;
+}
+
+.recap-hero-panel {
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.recap-range-header,
+.recap-range-label {
+  display: flex;
+  align-items: center;
+}
+
+.recap-range-header {
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.recap-range-label {
+  gap: 0.45rem;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.recap-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.recap-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.recap-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.recap-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.recap-date-field span {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.recap-date-field input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  border: 1px solid rgba(71, 85, 105, 0.8);
+  border-radius: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  outline: none;
+}
+
+.recap-date-field input:focus {
+  border-color: rgba(96, 165, 250, 0.85);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.recap-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.recap-meta-card {
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(30, 41, 59, 0.58);
+  border: 1px solid rgba(71, 85, 105, 0.55);
+}
+
+.recap-meta-card span {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 0.3rem;
+}
+
+.recap-meta-card strong {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.recap-error-banner,
+.recap-empty-state {
+  border-radius: 1rem;
+  padding: 1rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: #e2e8f0;
+}
+
+.recap-error-banner {
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+.recap-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.recap-overview-card {
+  border-radius: 1.3rem;
+  padding: 1.15rem;
+  text-align: left;
+}
+
+.recap-overview-top {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.recap-overview-avatar,
+.recap-player-avatar {
+  flex-shrink: 0;
+  color: white;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.35);
+}
+
+.recap-overview-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  font-size: 1rem;
+}
+
+.recap-overview-copy h2,
+.recap-player-title h3 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.recap-overview-rank {
+  display: inline-block;
+  margin-bottom: 0.25rem;
+  color: #fdba74;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.recap-overview-copy p,
+.recap-player-title p {
+  margin: 0.35rem 0 0;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.recap-overview-stats,
+.recap-overview-chips,
+.recap-chip-grid,
+.recap-dual-stats {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.recap-overview-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.recap-overview-chips,
+.recap-chip-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.9rem;
+}
+
+.recap-stat-card,
+.recap-chip {
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(30, 41, 59, 0.48);
+  border: 1px solid rgba(71, 85, 105, 0.45);
+}
+
+.recap-tone-accent {
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.recap-tone-cool {
+  border-color: rgba(34, 211, 238, 0.24);
+}
+
+.recap-tone-gold {
+  border-color: rgba(251, 191, 36, 0.24);
+}
+
+.recap-tone-success,
+.recap-chip-success {
+  border-color: rgba(74, 222, 128, 0.24);
+}
+
+.recap-tone-danger,
+.recap-chip-danger {
+  border-color: rgba(248, 113, 113, 0.24);
+}
+
+.recap-chip-accent {
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.recap-chip-cool {
+  border-color: rgba(34, 211, 238, 0.24);
+}
+
+.recap-stat-label,
+.recap-chip-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.recap-stat-value,
+.recap-chip-value {
+  display: block;
+  margin-top: 0.35rem;
+  color: #f8fafc;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.recap-chip-value {
+  font-size: 1rem;
+}
+
+.recap-stat-helper,
+.recap-chip-subvalue {
+  display: block;
+  margin-top: 0.3rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.recap-player-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.recap-player-card {
+  border-radius: 1.5rem;
+  padding: 1.25rem;
+  text-align: left;
+}
+
+.recap-player-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.recap-player-title {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.recap-player-avatar {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  font-size: 1.1rem;
+}
+
+.recap-player-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.recap-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.recap-badge-fire {
+  background: rgba(249, 115, 22, 0.12);
+  color: #fdba74;
+  border: 1px solid rgba(249, 115, 22, 0.22);
+}
+
+.recap-badge-gold {
+  background: rgba(234, 179, 8, 0.12);
+  color: #fcd34d;
+  border: 1px solid rgba(234, 179, 8, 0.22);
+}
+
+.recap-badge-toggle {
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  cursor: pointer;
+}
+
+.recap-badge-toggle.open .recap-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.recap-toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+.recap-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.recap-panel {
+  border-radius: 1.2rem;
+  padding: 1rem;
+  background: rgba(30, 41, 59, 0.42);
+  border: 1px solid rgba(71, 85, 105, 0.35);
+}
+
+.recap-panel-style {
+  grid-column: 1 / -1;
+}
+
+.recap-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.recap-dual-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.recap-style-table {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.recap-style-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.9rem;
+  background: rgba(15, 23, 42, 0.55);
+  color: #cbd5e1;
+}
+
+.recap-style-row strong {
+  color: #f8fafc;
+}
+
+.recap-spinner-icon {
+  color: #f8fafc;
+}
+
+.recap-team-breakdown-panel {
+  margin-top: 1rem;
+  border-radius: 1.2rem;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(71, 85, 105, 0.35);
+}
+
+.recap-team-breakdown-caption {
+  margin: -0.1rem 0 0.9rem;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.recap-team-breakdown-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.recap-team-breakdown-head,
+.recap-team-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(110px, 1fr));
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.recap-team-breakdown-head {
+  padding: 0 0.85rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.recap-team-row {
+  padding: 0.85rem;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.recap-team-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.recap-team-cell strong {
+  color: #f8fafc;
+}
+
+.recap-team-cell span {
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.recap-team-cell-name {
+  gap: 0.45rem;
+}
+
+.recap-team-cell-name strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recap-team-tag {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.recap-team-tag-nailed {
+  color: #86efac !important;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.recap-team-tag-burned {
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+.recap-team-tag-mixed {
+  color: #cbd5e1 !important;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.recap-team-breakdown-state {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 1rem 0.2rem 0.4rem;
+  color: #94a3b8;
+}
+
+.recap-team-breakdown-error {
+  color: #fecaca;
+}
+
+@media (max-width: 960px) {
+  .recap-hero,
+  .recap-section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recap-panel-style {
+    grid-column: auto;
+  }
+
+  .recap-team-breakdown-head {
+    display: none;
+  }
+
+  .recap-team-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .recap-page {
+    padding: 0.65rem;
+  }
+
+  .recap-hero-copy,
+  .recap-hero-panel,
+  .recap-overview-card,
+  .recap-player-card {
+    padding: 1rem;
+  }
+
+  .recap-range-inputs,
+  .recap-meta-grid,
+  .recap-overview-stats,
+  .recap-overview-chips,
+  .recap-chip-grid,
+  .recap-dual-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .recap-player-header,
+  .recap-range-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .recap-style-row {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .recap-team-row {
+    grid-template-columns: 1fr;
+  }
 }

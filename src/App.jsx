@@ -5,6 +5,7 @@ import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Leaderboard from "./pages/Leaderboard";
+import Recap from "./pages/Recap";
 import Admin from "./pages/Admin";
 import Profile from "./pages/Profile";
 
@@ -40,6 +41,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Leaderboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="recap"
+                element={
+                  <ProtectedRoute>
+                    <Recap />
                   </ProtectedRoute>
                 }
               />

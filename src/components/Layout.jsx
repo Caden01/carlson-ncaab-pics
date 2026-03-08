@@ -1,6 +1,14 @@
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Trophy, LogOut, User, Menu, X, Settings } from "lucide-react";
+import {
+  Trophy,
+  LogOut,
+  User,
+  Menu,
+  X,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 import { useState } from "react";
 import { useScrollRestoration } from "../lib/useScrollRestoration";
 
@@ -58,6 +66,15 @@ export default function Layout() {
                 >
                   <Trophy size={20} />
                   <span>Leaderboard</span>
+                </Link>
+                <Link
+                  to="/recap"
+                  className={`nav-link ${
+                    location.pathname === "/recap" ? "active" : ""
+                  }`}
+                >
+                  <Sparkles size={20} />
+                  <span>Recap</span>
                 </Link>
                 <Link
                   to="/profile"
@@ -124,6 +141,13 @@ export default function Layout() {
                 >
                   Profile
                 </Link>
+                <Link
+                  to="/recap"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="mobile-nav-link"
+                >
+                  Recap
+                </Link>
                 {isAdmin && (
                   <Link
                     to="/admin"
@@ -164,7 +188,8 @@ export default function Layout() {
 
       <main
         className={
-          location.pathname === "/leaderboard"
+          location.pathname === "/leaderboard" ||
+          location.pathname === "/recap"
             ? "full-width-content"
             : "main-content"
         }
