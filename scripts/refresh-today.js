@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { fetchDailyGames } from "../src/lib/espn.js";
+import {
+  hasMajorConferenceTeam,
+  hasValidSpread,
+  isIncludedConferenceTournament,
+  isSpreadTooHigh,
+} from "../src/lib/gameFilters.js";
 import fs from "fs";
 import path from "path";
 
@@ -26,8 +32,6 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
-
 async function removeGamesWithoutSpread() {
   console.log("--- Removing Games Without Valid Spreads ---");
   try {
@@ -57,6 +61,11 @@ async function removeGamesWithoutSpread() {
     let removedCount = 0;
     let keptCount = 0;
     let hasPicksCount = 0;
+    const espnDate = todayStr.replace(/-/g, "");
+    const latestGames = await fetchDailyGames(espnDate, ODDS_API_KEY);
+    const latestGamesByExternalId = new Map(
+      latestGames.map((game) => [game.external_id, game])
+    );
 
     for (const game of todaysGames) {
       // Check if game has a valid spread
@@ -70,6 +79,10 @@ async function removeGamesWithoutSpread() {
         }
       }
 
+      const latestGame = latestGamesByExternalId.get(game.external_id);
+      const exemptTournamentGame =
+        latestGame != null && isIncludedConferenceTournament(latestGame);
+
       const hasInvalidSpread =
         !game.spread ||
         game.spread === null ||
@@ -77,7 +90,7 @@ async function removeGamesWithoutSpread() {
           game.spread.toLowerCase().includes("off")) ||
         spreadValue === null ||
         isNaN(spreadValue) ||
-        Math.abs(spreadValue) > 12;
+        (Math.abs(spreadValue) > 12 && !exemptTournamentGame);
 
       if (hasInvalidSpread) {
         // Check if game has picks
@@ -183,16 +196,11 @@ async function refreshTodaysGames() {
     let errorCount = 0;
 
     for (const game of games) {
-      // Filter: Must include at least one team from major conferences
-      // Ensure we compare strings, handling null/undefined
-      const teamAConf =
-        game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
-      const teamBConf =
-        game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
-      if (
-        (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
-        (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
-      ) {
+      if (!hasMajorConferenceTeam(game)) {
+        const teamAConf =
+          game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
+        const teamBConf =
+          game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
         );
@@ -200,17 +208,7 @@ async function refreshTodaysGames() {
         continue;
       }
 
-      // Filter: Skip games without a valid spread
-      // Check if spread is null, undefined, or set to "off"
-      // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
-      if (
-        game.spread_value === null ||
-        game.spread_value === undefined ||
-        !game.spread ||
-        game.spread === null ||
-        (typeof game.spread === "string" &&
-          game.spread.toLowerCase().includes("off"))
-      ) {
+      if (!hasValidSpread(game)) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: No valid spread (spread: ${game.spread}, spread_value: ${game.spread_value})`
         );
@@ -218,13 +216,7 @@ async function refreshTodaysGames() {
         continue;
       }
 
-      // Filter: If spread exists, only import games with spread <= 12
-      // Ensure spread_value is a valid number before using Math.abs
-      if (
-        typeof game.spread_value !== "number" ||
-        isNaN(game.spread_value) ||
-        Math.abs(game.spread_value) > 12
-      ) {
+      if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
         );
@@ -282,6 +274,8 @@ async function refreshTodaysGames() {
             team_b_rank: game.team_b_rank,
             team_a_abbrev: game.team_a_abbrev,
             team_b_abbrev: game.team_b_abbrev,
+            season_phase: game.season_phase,
+            tournament_name: game.tournament_name,
             game_date: game.game_date,
           },
         ]);
@@ -323,6 +317,8 @@ async function refreshTodaysGames() {
           team_a_rank: game.team_a_rank,
           team_b_record: game.team_b_record,
           team_b_rank: game.team_b_rank,
+          season_phase: game.season_phase,
+          tournament_name: game.tournament_name,
         };
 
         // Only backfill spread if game was imported without one

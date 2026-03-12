@@ -16,6 +16,31 @@ import {
   TrendingUp,
 } from "lucide-react";
 
+const RECAP_PHASES = {
+  regular_season: {
+    label: "Regular Season",
+    eyebrow: "Regular Season Dossier",
+    title: "Season Recap",
+    subtitle:
+      "A mix of real stats and personality: who each player read best, who kept fooling them, and how their style changed the race.",
+    empty: "No regular-season recap data yet for the selected date range.",
+    loading: "Loading season recap...",
+    rankSuffix: "overall",
+    clipLabel: "season clip",
+  },
+  conference_tournament: {
+    label: "Tournament",
+    eyebrow: "Conference Tournament Dossier",
+    title: "Tournament Recap",
+    subtitle:
+      "See who handled the neutral-floor chaos best, whose reads held up in tournament settings, and who got hot when the stakes rose.",
+    empty: "No tournament recap data yet for the selected date range.",
+    loading: "Loading tournament recap...",
+    rankSuffix: "in tournament",
+    clipLabel: "tournament clip",
+  },
+};
+
 const formatDateLabel = (dateString) => {
   if (!dateString) return "N/A";
   return new Date(`${dateString}T00:00:00`).toLocaleDateString(undefined, {
@@ -33,8 +58,12 @@ const formatPercent = (value) => {
 
 const formatRecord = (wins, losses) => `${wins || 0}-${losses || 0}`;
 
-const buildStyleSummary = (styleStats) => {
-  if (!styleStats) return "Still waiting on enough finished picks to define a style.";
+const buildStyleSummary = (styleStats, recapPhase) => {
+  if (!styleStats) {
+    return recapPhase === "conference_tournament"
+      ? "Still waiting on enough tournament picks to define a style."
+      : "Still waiting on enough finished picks to define a style.";
+  }
 
   const contrarianRate = Number(styleStats.contrarian_hit_rate ?? -1);
   const majorityRate = Number(styleStats.majority_hit_rate ?? -1);
@@ -53,7 +82,9 @@ const buildStyleSummary = (styleStats) => {
     return "Did best when backing the obvious side.";
   }
 
-  return "Played the board with a balanced style all season.";
+  return recapPhase === "conference_tournament"
+    ? "Played the tournament board with a balanced style."
+    : "Played the board with a balanced style all season.";
 };
 
 const buildTeamTag = (row) => {
@@ -96,6 +127,7 @@ function StyleRow({ label, wins, losses, rate }) {
 }
 
 export default function Recap() {
+  const [recapPhase, setRecapPhase] = useState("regular_season");
   const [seasonRange, setSeasonRange] = useState({
     start: "",
     end: "",
@@ -115,17 +147,51 @@ export default function Recap() {
   const [teamBreakdownErrors, setTeamBreakdownErrors] = useState({});
 
   const hasRange = seasonRange.start && seasonRange.end;
+  const phaseConfig = RECAP_PHASES[recapPhase];
+  const showWeeklySections = recapPhase === "regular_season";
+
+  const isMissingPhaseRpcError = (rpcError, functionName) => {
+    const message = rpcError?.message || "";
+
+    return (
+      message.includes("schema cache") &&
+      message.includes(`public.${functionName}`) &&
+      message.includes("p_phase")
+    );
+  };
+
+  const callRecapRpc = async (functionName, args) => {
+    const response = await supabase.rpc(functionName, args);
+
+    if (!response.error) {
+      return response;
+    }
+
+    if (!isMissingPhaseRpcError(response.error, functionName)) {
+      return response;
+    }
+
+    if (recapPhase !== "regular_season") {
+      throw new Error(
+        "Tournament recap needs the latest SQL deployed. Run `add_season_recap_rpc.sql` in Supabase SQL Editor."
+      );
+    }
+
+    const { p_phase: _unused, ...legacyArgs } = args;
+    return supabase.rpc(functionName, legacyArgs);
+  };
 
   useEffect(() => {
     fetchSeasonBounds();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recapPhase]);
 
   useEffect(() => {
     if (hasRange) {
       fetchRecap();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonRange.start, seasonRange.end]);
+  }, [seasonRange.start, seasonRange.end, recapPhase]);
 
   const fetchSeasonBounds = async () => {
     try {
@@ -140,6 +206,7 @@ export default function Recap() {
           .from("games")
           .select("game_date")
           .eq("status", "finished")
+          .eq("season_phase", recapPhase)
           .order("game_date", { ascending: true })
           .limit(1)
           .maybeSingle(),
@@ -147,6 +214,7 @@ export default function Recap() {
           .from("games")
           .select("game_date")
           .eq("status", "finished")
+          .eq("season_phase", recapPhase)
           .order("game_date", { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -156,7 +224,12 @@ export default function Recap() {
       if (latestError) throw latestError;
 
       if (!earliestGame?.game_date || !latestGame?.game_date) {
-        setError("No finished games found yet, so the recap is empty.");
+        setSeasonRange({ start: "", end: "" });
+        setError(
+          recapPhase === "conference_tournament"
+            ? "No finished conference tournament games found yet."
+            : "No finished regular-season games found yet."
+        );
         return;
       }
 
@@ -180,6 +253,7 @@ export default function Recap() {
       const rpcArgs = {
         p_season_start: seasonRange.start,
         p_season_end: seasonRange.end,
+        p_phase: recapPhase,
       };
 
       setExpandedPlayers({});
@@ -195,15 +269,16 @@ export default function Recap() {
         styleStatsRes,
         finishedGamesRes,
       ] = await Promise.all([
-        supabase.rpc("get_recap_overview", rpcArgs),
-        supabase.rpc("get_recap_team_insights", rpcArgs),
-        supabase.rpc("get_recap_streaks", rpcArgs),
-        supabase.rpc("get_recap_weekly_highlights", rpcArgs),
-        supabase.rpc("get_recap_style_stats", rpcArgs),
+        callRecapRpc("get_recap_overview", rpcArgs),
+        callRecapRpc("get_recap_team_insights", rpcArgs),
+        callRecapRpc("get_recap_streaks", rpcArgs),
+        callRecapRpc("get_recap_weekly_highlights", rpcArgs),
+        callRecapRpc("get_recap_style_stats", rpcArgs),
         supabase
           .from("games")
           .select("id", { count: "exact", head: true })
           .eq("status", "finished")
+          .eq("season_phase", recapPhase)
           .gte("game_date", seasonRange.start)
           .lte("game_date", seasonRange.end),
       ]);
@@ -237,11 +312,12 @@ export default function Recap() {
       setTeamBreakdownLoading((prev) => ({ ...prev, [userId]: true }));
       setTeamBreakdownErrors((prev) => ({ ...prev, [userId]: "" }));
 
-      const { data, error: rpcError } = await supabase.rpc(
+      const { data, error: rpcError } = await callRecapRpc(
         "get_recap_team_breakdown",
         {
           p_season_start: seasonRange.start,
           p_season_end: seasonRange.end,
+          p_phase: recapPhase,
           p_user_id: userId,
         }
       );
@@ -296,7 +372,7 @@ export default function Recap() {
       <div className="recap-page recap-page-loading">
         <div className="spinner-container">
           <Loader2 className="spinner recap-spinner-icon" size={36} />
-          <p>Loading season recap...</p>
+          <p>{phaseConfig.loading}</p>
         </div>
       </div>
     );
@@ -307,24 +383,21 @@ export default function Recap() {
       <div className="recap-content">
         <section className="recap-hero">
           <div className="recap-hero-copy">
-            <span className="recap-eyebrow">Regular Season Dossier</span>
+            <span className="recap-eyebrow">{phaseConfig.eyebrow}</span>
             <div className="recap-title-row">
               <div className="recap-hero-icon">
                 <Sparkles size={22} />
               </div>
-              <h1 className="recap-title">Season Recap</h1>
+              <h1 className="recap-title">{phaseConfig.title}</h1>
             </div>
-            <p className="recap-subtitle">
-              A mix of real stats and personality: who each player read best,
-              who kept fooling them, and how their style changed the race.
-            </p>
+            <p className="recap-subtitle">{phaseConfig.subtitle}</p>
           </div>
 
           <div className="recap-hero-panel">
             <div className="recap-range-header">
               <div className="recap-range-label">
                 <CalendarRange size={16} />
-                <span>Date range</span>
+                <span>{phaseConfig.label} range</span>
               </div>
               <button
                 type="button"
@@ -335,6 +408,21 @@ export default function Recap() {
                 <RefreshCw size={15} className={refreshing ? "spinner" : ""} />
                 <span>{refreshing ? "Refreshing" : "Refresh"}</span>
               </button>
+            </div>
+
+            <div className="recap-phase-toggle" role="tablist" aria-label="Recap phase">
+              {Object.entries(RECAP_PHASES).map(([phase, config]) => (
+                <button
+                  key={phase}
+                  type="button"
+                  className={`recap-phase-btn ${
+                    recapPhase === phase ? "active" : ""
+                  }`}
+                  onClick={() => setRecapPhase(phase)}
+                >
+                  {config.label}
+                </button>
+              ))}
             </div>
 
             <div className="recap-range-inputs">
@@ -410,10 +498,10 @@ export default function Recap() {
                 </div>
                 <div className="recap-overview-copy">
                   <span className="recap-overview-rank">
-                    #{player.season_rank} overall
+                    #{player.season_rank} {phaseConfig.rankSuffix}
                   </span>
                   <h2>{player.username}</h2>
-                  <p>{buildStyleSummary(player.styleStats)}</p>
+                  <p>{buildStyleSummary(player.styleStats, recapPhase)}</p>
                 </div>
               </div>
 
@@ -430,12 +518,14 @@ export default function Recap() {
                   helper="Against the spread"
                   tone="cool"
                 />
-                <RecapStat
-                  label="Weekly titles"
-                  value={player.weekly_titles || 0}
-                  helper="Best weekly finishes"
-                  tone="gold"
-                />
+                {showWeeklySections && (
+                  <RecapStat
+                    label="Weekly titles"
+                    value={player.weekly_titles || 0}
+                    helper="Best weekly finishes"
+                    tone="gold"
+                  />
+                )}
               </div>
 
               <div className="recap-overview-chips">
@@ -472,8 +562,8 @@ export default function Recap() {
                   <div>
                     <h3>{player.username}</h3>
                     <p>
-                      Finished #{player.season_rank} with a{" "}
-                      {formatPercent(player.hit_rate)} season clip.
+                      Finished #{player.season_rank} {phaseConfig.rankSuffix} with a{" "}
+                      {formatPercent(player.hit_rate)} {phaseConfig.clipLabel}.
                     </p>
                   </div>
                 </div>
@@ -482,10 +572,12 @@ export default function Recap() {
                     <Flame size={14} />
                     {formatRecord(player.wins, player.losses)}
                   </span>
-                  <span className="recap-badge recap-badge-gold">
-                    <Crown size={14} />
-                    {player.weekly_titles || 0} weekly titles
-                  </span>
+                  {showWeeklySections && (
+                    <span className="recap-badge recap-badge-gold">
+                      <Crown size={14} />
+                      {player.weekly_titles || 0} weekly titles
+                    </span>
+                  )}
                   <button
                     type="button"
                     className={`recap-badge recap-badge-toggle ${
@@ -568,40 +660,42 @@ export default function Recap() {
                   </div>
                 </section>
 
-                <section className="recap-panel">
-                  <div className="recap-panel-header">
-                    <Sparkles size={16} />
-                    <span>Weekly Highlights</span>
-                  </div>
-                  <div className="recap-dual-stats">
-                    <RecapStat
-                      label="Best week"
-                      value={formatRecord(
-                        player.weeklyHighlights?.best_week_wins,
-                        player.weeklyHighlights?.best_week_losses
-                      )}
-                      helper={`${formatDateLabel(
-                        player.weeklyHighlights?.best_week_start
-                      )} - ${formatDateLabel(
-                        player.weeklyHighlights?.best_week_end
-                      )}`}
-                      tone="gold"
-                    />
-                    <RecapStat
-                      label="Worst week"
-                      value={formatRecord(
-                        player.weeklyHighlights?.worst_week_wins,
-                        player.weeklyHighlights?.worst_week_losses
-                      )}
-                      helper={`${formatDateLabel(
-                        player.weeklyHighlights?.worst_week_start
-                      )} - ${formatDateLabel(
-                        player.weeklyHighlights?.worst_week_end
-                      )}`}
-                      tone="neutral"
-                    />
-                  </div>
-                </section>
+                {showWeeklySections && (
+                  <section className="recap-panel">
+                    <div className="recap-panel-header">
+                      <Sparkles size={16} />
+                      <span>Weekly Highlights</span>
+                    </div>
+                    <div className="recap-dual-stats">
+                      <RecapStat
+                        label="Best week"
+                        value={formatRecord(
+                          player.weeklyHighlights?.best_week_wins,
+                          player.weeklyHighlights?.best_week_losses
+                        )}
+                        helper={`${formatDateLabel(
+                          player.weeklyHighlights?.best_week_start
+                        )} - ${formatDateLabel(
+                          player.weeklyHighlights?.best_week_end
+                        )}`}
+                        tone="gold"
+                      />
+                      <RecapStat
+                        label="Worst week"
+                        value={formatRecord(
+                          player.weeklyHighlights?.worst_week_wins,
+                          player.weeklyHighlights?.worst_week_losses
+                        )}
+                        helper={`${formatDateLabel(
+                          player.weeklyHighlights?.worst_week_start
+                        )} - ${formatDateLabel(
+                          player.weeklyHighlights?.worst_week_end
+                        )}`}
+                        tone="neutral"
+                      />
+                    </div>
+                  </section>
+                )}
 
                 <section className="recap-panel recap-panel-style">
                   <div className="recap-panel-header">
@@ -742,7 +836,7 @@ export default function Recap() {
         {!error && mergedPlayers.length === 0 && (
           <div className="recap-empty-state">
             <TrendingDown size={20} />
-            <span>No recap data yet for the selected date range.</span>
+            <span>{phaseConfig.empty}</span>
           </div>
         )}
       </div>

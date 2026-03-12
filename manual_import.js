@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { fetchDailyGames } from "./src/lib/espn.js";
+import {
+  hasMajorConferenceTeam,
+  hasValidSpread,
+  isIncludedConferenceTournament,
+  isSpreadTooHigh,
+} from "./src/lib/gameFilters.js";
 import fs from "fs";
 import path from "path";
 
@@ -23,8 +29,6 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
-
 async function importGames() {
   const today = new Date();
   const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
@@ -39,31 +43,12 @@ async function importGames() {
   let skippedConference = 0;
 
   for (const game of games) {
-    // Filter: Must include at least one team from major conferences
-    // Ensure we compare strings, handling null/undefined
-    const teamAConf =
-      game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
-    const teamBConf =
-      game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
-    if (
-      (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
-      (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
-    ) {
+    if (!hasMajorConferenceTeam(game)) {
       skippedConference++;
       continue;
     }
 
-    // Filter: Skip games without a valid spread
-    // Check if spread is null, undefined, or set to "off"
-    // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
-    if (
-      game.spread_value === null ||
-      game.spread_value === undefined ||
-      !game.spread ||
-      game.spread === null ||
-      (typeof game.spread === "string" &&
-        game.spread.toLowerCase().includes("off"))
-    ) {
+    if (!hasValidSpread(game)) {
       console.log(
         `Skipping ${game.team_a} vs ${game.team_b}: No valid spread (spread: ${game.spread}, spread_value: ${game.spread_value})`
       );
@@ -71,13 +56,7 @@ async function importGames() {
       continue;
     }
 
-    // Filter: If spread exists, only import games with spread <= 12
-    // Ensure spread_value is a valid number before using Math.abs
-    if (
-      typeof game.spread_value !== "number" ||
-      isNaN(game.spread_value) ||
-      Math.abs(game.spread_value) > 12
-    ) {
+    if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
       skippedSpreadTooHigh++;
       continue;
     }
@@ -128,6 +107,8 @@ async function importGames() {
           team_b_rank: game.team_b_rank,
           team_a_abbrev: game.team_a_abbrev,
           team_b_abbrev: game.team_b_abbrev,
+          season_phase: game.season_phase,
+          tournament_name: game.tournament_name,
           game_date: game.game_date,
         },
       ]);

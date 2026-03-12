@@ -17,6 +17,18 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isWideLayout =
+    location.pathname === "/leaderboard" || location.pathname === "/recap";
+
+  const navItems = [
+    { to: "/", label: "Dashboard", icon: null },
+    { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
+    { to: "/recap", label: "Recap", icon: Sparkles },
+    { to: "/profile", label: "Profile", icon: User },
+    ...(isAdmin
+      ? [{ to: "/admin", label: "Admin", icon: Settings }]
+      : []),
+  ];
 
   // Save and restore scroll position when navigating away and back
   useScrollRestoration();
@@ -50,52 +62,21 @@ export default function Layout() {
           <div className="desktop-menu">
             {user ? (
               <>
-                <Link
-                  to="/"
-                  className={`nav-link ${
-                    location.pathname === "/" ? "active" : ""
-                  }`}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/leaderboard"
-                  className={`nav-link ${
-                    location.pathname === "/leaderboard" ? "active" : ""
-                  }`}
-                >
-                  <Trophy size={20} />
-                  <span>Leaderboard</span>
-                </Link>
-                <Link
-                  to="/recap"
-                  className={`nav-link ${
-                    location.pathname === "/recap" ? "active" : ""
-                  }`}
-                >
-                  <Sparkles size={20} />
-                  <span>Recap</span>
-                </Link>
-                <Link
-                  to="/profile"
-                  className={`nav-link ${
-                    location.pathname === "/profile" ? "active" : ""
-                  }`}
-                >
-                  <User size={20} />
-                  <span>Profile</span>
-                </Link>
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    className={`nav-link ${
-                      location.pathname === "/admin" ? "active" : ""
-                    }`}
-                  >
-                    <Settings size={20} />
-                    <span>Admin</span>
-                  </Link>
-                )}
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className={`nav-link ${
+                        location.pathname === item.to ? "active" : ""
+                      }`}
+                    >
+                      {Icon && <Icon size={18} />}
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
                 <div className="user-menu">
                   <span className="user-email">{user.email}</span>
                   <button
@@ -120,43 +101,16 @@ export default function Layout() {
           <div className="mobile-menu">
             {user ? (
               <>
-                <Link
-                  to="/"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="mobile-nav-link"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/leaderboard"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="mobile-nav-link"
-                >
-                  Leaderboard
-                </Link>
-                <Link
-                  to="/profile"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="mobile-nav-link"
-                >
-                  Profile
-                </Link>
-                <Link
-                  to="/recap"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="mobile-nav-link"
-                >
-                  Recap
-                </Link>
-                {isAdmin && (
+                {navItems.map((item) => (
                   <Link
-                    to="/admin"
+                    key={item.to}
+                    to={item.to}
                     onClick={() => setIsMenuOpen(false)}
                     className="mobile-nav-link"
                   >
-                    Admin
+                    {item.label}
                   </Link>
-                )}
+                ))}
                 <div className="mobile-user-info">
                   <div className="user-details">
                     <User size={24} className="user-icon" />
@@ -186,14 +140,7 @@ export default function Layout() {
         )}
       </nav>
 
-      <main
-        className={
-          location.pathname === "/leaderboard" ||
-          location.pathname === "/recap"
-            ? "full-width-content"
-            : "main-content"
-        }
-      >
+      <main className={isWideLayout ? "full-width-content app-page" : "main-content app-page"}>
         <Outlet />
       </main>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { isRegularSeasonGame } from "../lib/gameFilters";
 import {
   Trophy,
   Medal,
@@ -21,11 +22,71 @@ export default function Leaderboard() {
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [weeklyWinners, setWeeklyWinners] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("week"); // 'daily', 'week', 'season'
+  const [activeTab, setActiveTab] = useState("week"); // 'daily', 'week', 'season', 'tournament'
   const [showWeeklyChampions, setShowWeeklyChampions] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [weekRecords, setWeekRecords] = useState({});
   const MAX_CACHED_WEEKS = 10; // Limit memory usage
+  const PICKS_CHUNK_SIZE = 200;
+
+  const tallyUserRecords = (games, picks, profilesList) => {
+    const userRecords = {};
+
+    profilesList.forEach((profile) => {
+      userRecords[profile.id] = { wins: 0, losses: 0 };
+    });
+
+    (picks || []).forEach((pick) => {
+      const game = games.find((g) => g.id === pick.game_id);
+      if (!game) return;
+
+      const covered = didTeamCover(game, pick.selected_team);
+      if (covered === null) return;
+
+      if (!userRecords[pick.user_id]) {
+        userRecords[pick.user_id] = { wins: 0, losses: 0 };
+      }
+
+      if (covered) {
+        userRecords[pick.user_id].wins++;
+      } else {
+        userRecords[pick.user_id].losses++;
+      }
+    });
+
+    return userRecords;
+  };
+
+  const countRegularSeasonWeeklyWins = (winners) => {
+    const counts = {};
+
+    winners.forEach((week) => {
+      week.winners.forEach((winner) => {
+        counts[winner.user_id] = (counts[winner.user_id] || 0) + 1;
+      });
+    });
+
+    return counts;
+  };
+
+  const fetchPicksForGameIds = async (gameIds) => {
+    if (!gameIds || gameIds.length === 0) return [];
+
+    const allPicks = [];
+
+    for (let start = 0; start < gameIds.length; start += PICKS_CHUNK_SIZE) {
+      const chunk = gameIds.slice(start, start + PICKS_CHUNK_SIZE);
+      const { data, error } = await supabase
+        .from("picks")
+        .select("user_id, game_id, selected_team")
+        .in("game_id", chunk);
+
+      if (error) throw error;
+      allPicks.push(...(data || []));
+    }
+
+    return allPicks;
+  };
 
   // Format date as YYYY-MM-DD in local timezone
   const formatLocalDate = (date) => {
@@ -93,9 +154,13 @@ export default function Leaderboard() {
         .order("week_start", { ascending: false });
 
       // Group winners by week (to handle ties - multiple winners with same record)
+      const regularSeasonWinners = (winnersData || []).filter(
+        (winner) => (winner.season_phase || "regular_season") === "regular_season"
+      );
+
       const weekGroups = {};
-      if (winnersData) {
-        for (const winner of winnersData) {
+      if (regularSeasonWinners.length > 0) {
+        for (const winner of regularSeasonWinners) {
           if (!weekGroups[winner.week_start]) {
             weekGroups[winner.week_start] = {
               week_start: winner.week_start,
@@ -117,7 +182,7 @@ export default function Leaderboard() {
       setWeeklyWinners(groupedWinners);
 
       // Calculate records based on active tab
-      await calculateRecords(profilesData || [], activeTab);
+      await calculateRecords(profilesData || [], activeTab, groupedWinners);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
     } finally {
@@ -125,9 +190,10 @@ export default function Leaderboard() {
     }
   };
 
-  const calculateRecords = async (profilesList, period) => {
+  const calculateRecords = async (profilesList, period, groupedWinners = weeklyWinners) => {
     try {
       let dateFilter = {};
+      const regularSeasonWeeklyWins = countRegularSeasonWeeklyWins(groupedWinners);
 
       if (period === "daily") {
         dateFilter = { start: selectedDate, end: selectedDate };
@@ -136,14 +202,66 @@ export default function Leaderboard() {
       }
       // 'season' = no date filter, use profile totals
 
-      if (period === "season") {
-        // Use stored totals from profiles
+      if (period === "season" || period === "tournament") {
+        const { data: games, error: gamesError } = await supabase
+          .from("games")
+          .select("*")
+          .eq("status", "finished");
+
+        if (gamesError) throw gamesError;
+
+        const regularSeasonGames = (games || []).filter(isRegularSeasonGame);
+        const tournamentGames = (games || []).filter((game) => !isRegularSeasonGame(game));
+        const allFinishedGameIds = (games || []).map((g) => g.id);
+        const picks = await fetchPicksForGameIds(allFinishedGameIds);
+
+        const regularSeasonRecords = tallyUserRecords(
+          regularSeasonGames,
+          picks,
+          profilesList
+        );
+        const tournamentRecords = tallyUserRecords(
+          tournamentGames,
+          picks,
+          profilesList
+        );
+
+        const rankedRecords =
+          period === "season" ? regularSeasonRecords : tournamentRecords;
+        const comparisonGames =
+          period === "season" ? regularSeasonGames : tournamentGames;
+
+        if (comparisonGames.length === 0) {
+          const ranked = profilesList
+            .map((profile) => ({
+              ...profile,
+              wins: rankedRecords[profile.id]?.wins || 0,
+              losses: rankedRecords[profile.id]?.losses || 0,
+              tournamentWins: tournamentRecords[profile.id]?.wins || 0,
+              tournamentLosses: tournamentRecords[profile.id]?.losses || 0,
+              regularSeasonWins: regularSeasonRecords[profile.id]?.wins || 0,
+              regularSeasonLosses: regularSeasonRecords[profile.id]?.losses || 0,
+              weeklyWins: regularSeasonWeeklyWins[profile.id] || 0,
+            }))
+            .sort((a, b) => {
+              if (b.wins !== a.wins) return b.wins - a.wins;
+              if (a.losses !== b.losses) return a.losses - b.losses;
+              return (b.weeklyWins || 0) - (a.weeklyWins || 0);
+            });
+          setLeaderboardData(ranked);
+          return;
+        }
+
         const ranked = profilesList
           .map((profile) => ({
             ...profile,
-            wins: profile.total_wins || 0,
-            losses: profile.total_losses || 0,
-            weeklyWins: profile.weekly_wins || 0,
+            wins: rankedRecords[profile.id]?.wins || 0,
+            losses: rankedRecords[profile.id]?.losses || 0,
+            tournamentWins: tournamentRecords[profile.id]?.wins || 0,
+            tournamentLosses: tournamentRecords[profile.id]?.losses || 0,
+            regularSeasonWins: regularSeasonRecords[profile.id]?.wins || 0,
+            regularSeasonLosses: regularSeasonRecords[profile.id]?.losses || 0,
+            weeklyWins: regularSeasonWeeklyWins[profile.id] || 0,
           }))
           .sort((a, b) => {
             // Sort by wins, then by fewer losses, then by weekly champions
@@ -172,7 +290,7 @@ export default function Leaderboard() {
           ...profile,
           wins: 0,
           losses: 0,
-          weeklyWins: profile.weekly_wins || 0,
+            weeklyWins: regularSeasonWeeklyWins[profile.id] || 0,
           gamesCount: 0,
         }));
         setLeaderboardData(ranked);
@@ -180,38 +298,10 @@ export default function Leaderboard() {
       }
 
       const gameIds = games.map((g) => g.id);
-
-      // Fetch all picks for these games
-      const { data: picks, error: picksError } = await supabase
-        .from("picks")
-        .select("user_id, game_id, selected_team")
-        .in("game_id", gameIds);
-
-      if (picksError) throw picksError;
+      const picks = await fetchPicksForGameIds(gameIds);
 
       // Calculate wins/losses for each user
-      const userRecords = {};
-      profilesList.forEach((p) => {
-        userRecords[p.id] = { wins: 0, losses: 0 };
-      });
-
-      (picks || []).forEach((pick) => {
-        const game = games.find((g) => g.id === pick.game_id);
-        if (!game) return;
-
-        const covered = didTeamCover(game, pick.selected_team);
-        if (covered === null) return;
-
-        if (!userRecords[pick.user_id]) {
-          userRecords[pick.user_id] = { wins: 0, losses: 0 };
-        }
-
-        if (covered) {
-          userRecords[pick.user_id].wins++;
-        } else {
-          userRecords[pick.user_id].losses++;
-        }
-      });
+      const userRecords = tallyUserRecords(games, picks, profilesList);
 
       // Merge with profiles and sort
       const ranked = profilesList
@@ -219,7 +309,7 @@ export default function Leaderboard() {
           ...profile,
           wins: userRecords[profile.id]?.wins || 0,
           losses: userRecords[profile.id]?.losses || 0,
-          weeklyWins: profile.weekly_wins || 0,
+            weeklyWins: regularSeasonWeeklyWins[profile.id] || 0,
           gamesCount: games.length,
         }))
         .sort((a, b) => {
@@ -260,7 +350,9 @@ export default function Leaderboard() {
       case "week":
         return "This Week's Standings";
       case "season":
-        return "Season Standings";
+        return "Regular Season Standings";
+      case "tournament":
+        return "Tournament Standings";
       default:
         return "Standings";
     }
@@ -274,6 +366,21 @@ export default function Leaderboard() {
       return leaderboardData[0].gamesCount;
     }
     return 0;
+  };
+
+  const getTabSubtitle = () => {
+    switch (activeTab) {
+      case "daily":
+        return "A single-day snapshot of who read the card best.";
+      case "week":
+        return "Track the current weekly race and the players building momentum.";
+      case "season":
+        return "Regular-season standings with tournament context and weekly crowns.";
+      case "tournament":
+        return "Conference tournament performance, isolated from the regular season.";
+      default:
+        return "Track every phase of the competition.";
+    }
   };
 
   // Helper to update weekRecords with size limit (LRU-style eviction)
@@ -364,7 +471,9 @@ export default function Leaderboard() {
         .eq("status", "finished");
 
       if (gamesError) throw gamesError;
-      if (!games || games.length === 0) {
+      const regularSeasonGames = (games || []).filter(isRegularSeasonGame);
+
+      if (regularSeasonGames.length === 0) {
         // No games in database for this week
         // Try to get at least the winner's record from weekly_winners
         // Handle duplicates by taking the first one (earliest created_at)
@@ -414,7 +523,7 @@ export default function Leaderboard() {
         return [];
       }
 
-      const gameIds = games.map((g) => g.id);
+      const gameIds = regularSeasonGames.map((g) => g.id);
 
       // Get all picks for these games
       const { data: picks, error: picksError } = await supabase
@@ -436,7 +545,7 @@ export default function Leaderboard() {
       });
 
       (picks || []).forEach((pick) => {
-        const game = games.find((g) => g.id === pick.game_id);
+        const game = regularSeasonGames.find((g) => g.id === pick.game_id);
         if (!game) return;
 
         const covered = didTeamCover(game, pick.selected_team);
@@ -516,16 +625,38 @@ export default function Leaderboard() {
   return (
     <div className="leaderboard-page">
       <div className="leaderboard-content">
-        <div className="leaderboard-header-section">
-          <div className="header-title-row">
-            <div className="icon-box">
-              <Zap size={24} className="text-white" />
+        <div className="leaderboard-header-section app-page-hero">
+          <div className="app-page-hero-copy">
+            <div className="app-page-eyebrow">
+              <Zap size={14} />
+              Competition tracker
             </div>
-            <h1 className="header-title">Leaderboard</h1>
+            <div className="app-page-title-row">
+              <div className="app-page-icon">
+                <Trophy size={22} />
+              </div>
+              <div>
+                <h1 className="app-page-title">Leaderboard</h1>
+                <p className="app-page-subtitle">{getTabSubtitle()}</p>
+              </div>
+            </div>
           </div>
-          <p className="header-subtitle">
-            Track your performance and compete for weekly wins!
-          </p>
+          <div className="app-page-hero-side">
+            <div className="app-page-meta-grid">
+              <div className="app-page-meta-card">
+                <span>View</span>
+                <strong>{getTabLabel()}</strong>
+              </div>
+              <div className="app-page-meta-card">
+                <span>Players</span>
+                <strong>{profiles.length}</strong>
+              </div>
+              <div className="app-page-meta-card">
+                <span>Finished Games</span>
+                <strong>{getGamesCount()}</strong>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -557,13 +688,20 @@ export default function Leaderboard() {
             onClick={() => setActiveTab("season")}
           >
             <Trophy size={16} />
-            <span>Season</span>
+            <span>Regular</span>
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "tournament" ? "active" : ""}`}
+            onClick={() => setActiveTab("tournament")}
+          >
+            <Flame size={16} />
+            <span>Tournament</span>
           </button>
         </div>
 
         {/* Date Navigation for Daily tab */}
         {activeTab === "daily" && (
-          <div className="date-navigation">
+          <div className="date-navigation app-page-panel">
             <button onClick={() => changeDate(-1)} className="date-nav-btn">
               <ChevronLeft size={20} />
             </button>
@@ -764,8 +902,25 @@ export default function Leaderboard() {
                 <tr>
                   <th className="th-rank">Rank</th>
                   <th className="th-player">Player</th>
-                  <th className="th-record">Record</th>
-                  <th className="th-winrate">Win Rate</th>
+                  <th className="th-record">
+                    {activeTab === "season"
+                      ? "Regular Season"
+                      : activeTab === "tournament"
+                      ? "Tournament"
+                      : "Record"}
+                  </th>
+                  {(activeTab === "season" || activeTab === "tournament") && (
+                    <th className="th-tournament-record">
+                      {activeTab === "season" ? "Tournament" : "Regular Season"}
+                    </th>
+                  )}
+                  <th className="th-winrate">
+                    {activeTab === "season"
+                      ? "Reg Win Rate"
+                      : activeTab === "tournament"
+                      ? "Tour Win Rate"
+                      : "Win Rate"}
+                  </th>
                   {activeTab === "season" && (
                     <th className="th-weekly-wins">Weekly Wins</th>
                   )}
@@ -776,6 +931,14 @@ export default function Leaderboard() {
                 {leaderboardData.map((profile, index) => {
                   const wins = profile.wins || 0;
                   const losses = profile.losses || 0;
+                  const tournamentWins =
+                    activeTab === "tournament"
+                      ? profile.regularSeasonWins || 0
+                      : profile.tournamentWins || 0;
+                  const tournamentLosses =
+                    activeTab === "tournament"
+                      ? profile.regularSeasonLosses || 0
+                      : profile.tournamentLosses || 0;
                   const total = wins + losses;
                   const winRate =
                     total > 0 ? ((wins / total) * 100).toFixed(1) : "0.0";
@@ -835,6 +998,18 @@ export default function Leaderboard() {
                                   </span>
                                 </div>
                               )}
+                            {(activeTab === "season" ||
+                              activeTab === "tournament") && (
+                              <div className="player-record-split">
+                                <span className="player-record-pill">
+                                  {activeTab === "season" ? "Reg" : "Tour"} {wins}-{losses}
+                                </span>
+                                <span className="player-record-pill player-record-pill-muted">
+                                  {activeTab === "season" ? "Tour" : "Reg"}{" "}
+                                  {tournamentWins}-{tournamentLosses}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -844,6 +1019,14 @@ export default function Leaderboard() {
                           {wins}-{losses}
                         </span>
                       </td>
+
+                      {(activeTab === "season" || activeTab === "tournament") && (
+                        <td className="td-tournament-record">
+                          <span className="record-text record-text-muted">
+                            {tournamentWins}-{tournamentLosses}
+                          </span>
+                        </td>
+                      )}
 
                       <td className="td-winrate">
                         <div className="winrate-badge">
@@ -867,9 +1050,21 @@ export default function Leaderboard() {
 
                       <td className="td-mobile-stats">
                         <div className="mobile-stats-container">
-                          <span className="record-text">
-                            {wins}-{losses}
-                          </span>
+                          {activeTab === "season" || activeTab === "tournament" ? (
+                            <>
+                              <span className="record-text">
+                                {activeTab === "season" ? "Reg" : "Tour"} {wins}-{losses}
+                              </span>
+                              <span className="mobile-tournament-record">
+                                {activeTab === "season" ? "Tour" : "Reg"}{" "}
+                                {tournamentWins}-{tournamentLosses}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="record-text">
+                              {wins}-{losses}
+                            </span>
+                          )}
                           <span className="mobile-winrate">{winRate}%</span>
                           {activeTab === "season" && profile.weeklyWins > 0 && (
                             <span className="mobile-weekly-wins">
@@ -885,7 +1080,13 @@ export default function Leaderboard() {
                 {leaderboardData.length === 0 && (
                   <tr>
                     <td
-                      colSpan={activeTab === "season" ? 6 : 5}
+                      colSpan={
+                        activeTab === "season"
+                          ? 7
+                          : activeTab === "tournament"
+                          ? 6
+                          : 5
+                      }
                       className="empty-message"
                     >
                       No players yet. Be the first to join!

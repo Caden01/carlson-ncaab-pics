@@ -22,8 +22,8 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
-          <div className="bg-slate-800 rounded-2xl p-8 max-w-md w-full text-center border border-slate-700">
+        <div className="auth-container">
+          <div className="app-page-panel max-w-md w-full text-center">
             <div className="flex justify-center mb-4">
               <div className="p-3 bg-red-500/20 rounded-full">
                 <AlertTriangle size={32} className="text-red-500" />
@@ -42,7 +42,8 @@ export default class ErrorBoundary extends Component {
             )}
             <button
               onClick={this.handleReload}
-              className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+              className="app-button btn-primary"
+              style={{ width: "100%" }}
             >
               <RefreshCw size={18} />
               Refresh Page

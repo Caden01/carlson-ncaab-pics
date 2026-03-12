@@ -11,6 +11,9 @@ import {
   Calendar,
   Users,
   ShieldAlert,
+  Sparkles,
+  Trophy,
+  Flame,
 } from "lucide-react";
 import { getAvatarGradient } from "../lib/utils";
 import { fetchDailyGames } from "../lib/espn";
@@ -356,6 +359,8 @@ export default function Dashboard() {
 
             const updates = {
               status: newStatus,
+              season_phase: espnGame.season_phase,
+              tournament_name: espnGame.tournament_name,
             };
 
             // Check if teams are swapped in DB compared to ESPN
@@ -474,40 +479,93 @@ export default function Dashboard() {
     );
   }
 
+  const formattedDate = new Date(`${selectedDate}T00:00:00`).toLocaleDateString(
+    undefined,
+    { weekday: "long", month: "long", day: "numeric" }
+  );
+  const liveGamesCount = games.filter((game) => game.status === "in_progress").length;
+  const lockedGamesCount = games.filter((game) => isGameLocked(game.start_time)).length;
+  const finishedGamesCount = games.filter((game) => game.status === "finished").length;
+
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <h1>Dashboard</h1>
-        <div className="date-nav">
-          <button onClick={() => changeDate(-1)} className="icon-btn">
-            <ChevronLeft size={24} />
-          </button>
-          <div className="current-date">
-            <Calendar size={20} />
-            <span>
-              {new Date(selectedDate + "T00:00:00").toLocaleDateString(
-                undefined,
-                { weekday: "short", month: "short", day: "numeric" }
-              )}
-            </span>
+    <div className="dashboard-container app-page-content">
+      <section className="app-page-hero">
+        <div className="app-page-hero-copy">
+          <div className="app-page-eyebrow">
+            <Sparkles size={14} />
+            Daily board
           </div>
-          <button onClick={() => changeDate(1)} className="icon-btn">
-            <ChevronRight size={24} />
-          </button>
+          <div className="app-page-title-row">
+            <div className="app-page-icon">
+              <Trophy size={22} />
+            </div>
+            <div>
+              <h1 className="app-page-title">Dashboard</h1>
+              <p className="app-page-subtitle">
+                Make picks, track live scores, and keep the whole slate in one
+                recap-style control room.
+              </p>
+            </div>
+          </div>
         </div>
-      </header>
+        <div className="app-page-hero-side">
+          <div className="dashboard-header">
+            <div className="page-actions">
+              <button onClick={() => changeDate(-1)} className="app-button app-button-secondary">
+                <ChevronLeft size={18} />
+                Prev
+              </button>
+              <div className="current-date">
+                <Calendar size={18} />
+                <span>{formattedDate}</span>
+              </div>
+              <button onClick={() => changeDate(1)} className="app-button app-button-secondary">
+                Next
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="app-page-meta-grid">
+            <div className="app-page-meta-card">
+              <span>Games</span>
+              <strong>{games.length}</strong>
+            </div>
+            <div className="app-page-meta-card">
+              <span>Live</span>
+              <strong>{liveGamesCount}</strong>
+            </div>
+            <div className="app-page-meta-card">
+              <span>Locked</span>
+              <strong>{lockedGamesCount}</strong>
+            </div>
+          </div>
+          {finishedGamesCount > 0 && (
+            <p className="helper-text">
+              {finishedGamesCount} game{finishedGamesCount === 1 ? "" : "s"} already final for this slate.
+            </p>
+          )}
+        </div>
+      </section>
 
       {isAdmin && allProfiles.length > 0 && (
-        <div className="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
-          <div className="flex items-center gap-2 mb-2 text-amber-500 font-semibold">
+        <section className="app-page-panel">
+          <div className="app-page-eyebrow">
             <ShieldAlert size={20} />
-            <span>Admin Override Mode</span>
+            Admin override
           </div>
-          <div className="flex items-center gap-4">
-            <label className="text-sm text-slate-400">Making picks for:</label>
-            <div className="relative flex-1 max-w-xs">
+          <div className="page-panels-grid">
+            <div>
+              <h2 style={{ marginTop: 0 }}>Pick as any player</h2>
+              <p className="helper-text">
+                Switch the active profile to enter or correct picks without
+                leaving the main board.
+              </p>
+            </div>
+            <div className="app-field">
+              <label htmlFor="acting-user">Making picks for</label>
               <select
-                className="w-full p-2 pl-9 bg-slate-900 border border-slate-700 rounded text-white appearance-none cursor-pointer focus:border-amber-500 outline-none"
+                id="acting-user"
+                className="app-select"
                 value={actingUser?.id || ""}
                 onChange={(e) => {
                   const selected = allProfiles.find(
@@ -529,13 +587,15 @@ export default function Dashboard() {
                   </option>
                 ))}
               </select>
-              <Users
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              />
             </div>
           </div>
-        </div>
+          {actingUser && (
+            <div className="current-date" style={{ marginTop: "1rem", width: "fit-content" }}>
+              <Users size={16} />
+              Acting as {actingUser.username}
+            </div>
+          )}
+        </section>
       )}
 
       {games.length === 0 ? (
@@ -556,6 +616,31 @@ export default function Dashboard() {
             return (
               <div key={game.id} className="game-card">
                 <div className="game-info">
+                  <div className="game-meta">
+                    <span className="game-time">
+                      {game.status === "in_progress" ? (
+                        <span className="text-red-500 font-bold animate-pulse">
+                          LIVE
+                        </span>
+                      ) : game.start_time ? (
+                        new Date(game.start_time).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      ) : (
+                        "TBD"
+                      )}
+                    </span>
+                    {game.spread && (
+                      <span className="game-spread">{game.spread}</span>
+                    )}
+                    {game.season_phase === "conference_tournament" && (
+                      <span className="cover-badge">
+                        <Flame size={14} />
+                        {game.tournament_name || "Tournament"}
+                      </span>
+                    )}
+                  </div>
                   <div className="teams">
                     <div
                       className={`team-container ${
@@ -610,25 +695,6 @@ export default function Dashboard() {
                         </span>
                       )}
                     </div>
-                  </div>
-                  <div className="game-meta">
-                    <span className="game-time">
-                      {game.status === "in_progress" ? (
-                        <span className="text-red-500 font-bold animate-pulse">
-                          LIVE
-                        </span>
-                      ) : game.start_time ? (
-                        new Date(game.start_time).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      ) : (
-                        "TBD"
-                      )}
-                    </span>
-                    {game.spread && (
-                      <span className="game-spread">{game.spread}</span>
-                    )}
                   </div>
                 </div>
                 <div className="teams-container">

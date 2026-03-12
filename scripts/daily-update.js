@@ -1,6 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { fetchDailyGames } from "../src/lib/espn.js";
 import { didTeamCover } from "../src/lib/gameLogic.js";
+import {
+  hasMajorConferenceTeam,
+  hasValidSpread,
+  isIncludedConferenceTournament,
+  isRegularSeasonGame,
+  isSpreadTooHigh,
+} from "../src/lib/gameFilters.js";
 
 // Optional: Use The Odds API for more reliable spread data
 // Get a free API key at https://the-odds-api.com/ (500 requests/month free)
@@ -19,8 +26,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
 
 // Format a date as YYYY-MM-DD in PST timezone (consistent across all environments)
 function formatDatePST(date) {
@@ -166,8 +171,8 @@ async function syncActiveGames() {
           // If so, remove the game (only if it has no picks)
           if (
             !dbGame.spread &&
-            espnGame.spread_value &&
-            Math.abs(espnGame.spread_value) > 12
+            isSpreadTooHigh(espnGame) &&
+            !isIncludedConferenceTournament(espnGame)
           ) {
             // Check if game has picks
             const { data: picks } = await supabase
@@ -208,6 +213,8 @@ async function syncActiveGames() {
               team_a_rank: espnGame.team_a_rank,
               team_b_record: espnGame.team_b_record,
               team_b_rank: espnGame.team_b_rank,
+              season_phase: espnGame.season_phase,
+              tournament_name: espnGame.tournament_name,
             };
 
             // Check if teams are swapped in DB compared to ESPN
@@ -282,16 +289,11 @@ async function importGamesForDate(dateStr, dateName) {
   let skippedConference = 0;
 
   for (const game of games) {
-    // Filter: Must include at least one team from major conferences
-    // Ensure we compare strings, handling null/undefined
-    const teamAConf =
-      game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
-    const teamBConf =
-      game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
-    if (
-      (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
-      (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
-    ) {
+    if (!hasMajorConferenceTeam(game)) {
+      const teamAConf =
+        game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
+      const teamBConf =
+        game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
       console.log(
         `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
       );
@@ -299,17 +301,7 @@ async function importGamesForDate(dateStr, dateName) {
       continue;
     }
 
-    // Filter: Skip games without a valid spread
-    // Check if spread is null, undefined, or set to "off"
-    // Note: spread_value of 0 (pick'em) is valid, so check explicitly for null/undefined
-    if (
-      game.spread_value === null ||
-      game.spread_value === undefined ||
-      !game.spread ||
-      game.spread === null ||
-      (typeof game.spread === "string" &&
-        game.spread.toLowerCase().includes("off"))
-    ) {
+    if (!hasValidSpread(game)) {
       console.log(
         `Skipping ${game.team_a} vs ${game.team_b}: No valid spread (spread: ${game.spread}, spread_value: ${game.spread_value})`
       );
@@ -317,13 +309,7 @@ async function importGamesForDate(dateStr, dateName) {
       continue;
     }
 
-    // Filter: If spread exists, only import games with spread <= 12
-    // Ensure spread_value is a valid number before using Math.abs
-    if (
-      typeof game.spread_value !== "number" ||
-      isNaN(game.spread_value) ||
-      Math.abs(game.spread_value) > 12
-    ) {
+    if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
       console.log(
         `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
       );
@@ -377,6 +363,8 @@ async function importGamesForDate(dateStr, dateName) {
           team_b_rank: game.team_b_rank,
           team_a_abbrev: game.team_a_abbrev,
           team_b_abbrev: game.team_b_abbrev,
+            season_phase: game.season_phase,
+            tournament_name: game.tournament_name,
           game_date: game.game_date,
         },
       ]);
@@ -458,6 +446,9 @@ async function importTodaysGames() {
 
 async function calculatePoints(gameId, gameData) {
   // Use spread/cover logic to determine wins
+  if (!isRegularSeasonGame(gameData)) {
+    return;
+  }
 
   const { data: picks, error: picksError } = await supabase
     .from("picks")
@@ -563,12 +554,14 @@ async function calculateWeeklyWinner() {
 
     if (gamesError) throw gamesError;
 
-    if (!games || games.length === 0) {
+    const regularSeasonGames = (games || []).filter(isRegularSeasonGame);
+
+    if (regularSeasonGames.length === 0) {
       console.log("No finished games for this week.");
       return;
     }
 
-    const gameIds = games.map((g) => g.id);
+    const gameIds = regularSeasonGames.map((g) => g.id);
 
     // Get all picks for these games
     const { data: picks, error: picksError } = await supabase
@@ -582,7 +575,7 @@ async function calculateWeeklyWinner() {
     const userRecords = {};
 
     (picks || []).forEach((pick) => {
-      const game = games.find((g) => g.id === pick.game_id);
+      const game = regularSeasonGames.find((g) => g.id === pick.game_id);
       if (!game) return;
 
       const covered = didTeamCover(game, pick.selected_team);
@@ -600,6 +593,7 @@ async function calculateWeeklyWinner() {
     });
 
     // Save ALL users' weekly records to weekly_records table (audit trail)
+    // Conference tournament games are intentionally excluded.
     // NOTE: Season totals are updated incrementally by calculatePoints() as games finish
     // This weekly_records table provides an audit trail to verify totals
     console.log("Saving weekly records for all users...");
@@ -740,7 +734,8 @@ async function recalculateSeasonTotals() {
     }
 
     for (const profile of profiles) {
-      // Calculate totals from weekly_records
+      // Calculate totals from weekly_records.
+      // This table tracks regular-season weeks only.
       const { data: weeklyRecords, error: recordsError } = await supabase
         .from("weekly_records")
         .select("wins, losses")

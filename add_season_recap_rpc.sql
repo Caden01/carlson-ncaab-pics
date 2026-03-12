@@ -7,6 +7,7 @@
 --   supabase.rpc("get_recap_overview", {
 --     p_season_start: "2025-11-10",
 --     p_season_end: "2026-03-08",
+--     p_phase: "regular_season",
 --   });
 
 create or replace view public.recap_pick_results
@@ -16,6 +17,8 @@ with parsed_games as (
     g.id as game_id,
     g.game_date,
     g.start_time,
+    g.season_phase,
+    g.tournament_name,
     g.team_a as away_team,
     g.team_b as home_team,
     g.team_a_abbrev as away_abbrev,
@@ -38,6 +41,8 @@ game_outcomes as (
     pg.game_id,
     pg.game_date,
     pg.start_time,
+    pg.season_phase,
+    pg.tournament_name,
     pg.away_team,
     pg.home_team,
     pg.away_abbrev,
@@ -72,6 +77,8 @@ pick_base as (
     p.game_id,
     go.game_date,
     go.start_time,
+    go.season_phase,
+    go.tournament_name,
     go.away_team,
     go.home_team,
     go.away_abbrev,
@@ -156,13 +163,16 @@ select
   case
     when pb.picked_margin is null or pb.picked_effective_spread is null then null
     else (pb.picked_margin + pb.picked_effective_spread) > 0
-  end as is_correct
+  end as is_correct,
+  pb.season_phase,
+  pb.tournament_name
 from pick_base pb;
 
 
 create or replace function public.get_recap_overview(
   p_season_start date,
-  p_season_end date
+  p_season_end date,
+  p_phase text default 'regular_season'
 )
 returns table (
   user_id uuid,
@@ -181,6 +191,7 @@ as $$
     select *
     from public.recap_pick_results
     where game_date between p_season_start and p_season_end
+      and coalesce(season_phase, 'regular_season') = p_phase
       and is_correct is not null
   ),
   records as (
@@ -200,7 +211,8 @@ as $$
       w.user_id,
       count(*) as weekly_titles
     from public.weekly_winners w
-    where w.week_start between p_season_start and p_season_end
+    where p_phase = 'regular_season'
+      and w.week_start between p_season_start and p_season_end
     group by w.user_id
   ),
   ranked as (
@@ -235,7 +247,8 @@ $$;
 
 create or replace function public.get_recap_team_insights(
   p_season_start date,
-  p_season_end date
+  p_season_end date,
+  p_phase text default 'regular_season'
 )
 returns table (
   user_id uuid,
@@ -266,6 +279,7 @@ as $$
     select *
     from public.recap_pick_results
     where game_date between p_season_start and p_season_end
+      and coalesce(season_phase, 'regular_season') = p_phase
       and is_correct is not null
   ),
   team_stats as (
@@ -381,7 +395,8 @@ $$;
 
 create or replace function public.get_recap_streaks(
   p_season_start date,
-  p_season_end date
+  p_season_end date,
+  p_phase text default 'regular_season'
 )
 returns table (
   user_id uuid,
@@ -400,6 +415,7 @@ as $$
     select *
     from public.recap_pick_results
     where game_date between p_season_start and p_season_end
+      and coalesce(season_phase, 'regular_season') = p_phase
       and is_correct is not null
   ),
   ordered as (
@@ -480,7 +496,8 @@ $$;
 
 create or replace function public.get_recap_weekly_highlights(
   p_season_start date,
-  p_season_end date
+  p_season_end date,
+  p_phase text default 'regular_season'
 )
 returns table (
   user_id uuid,
@@ -508,7 +525,8 @@ as $$
       wr.wins,
       wr.losses
     from public.weekly_records wr
-    where wr.week_start between p_season_start and p_season_end
+    where p_phase = 'regular_season'
+      and wr.week_start between p_season_start and p_season_end
   ),
   best_week as (
     select *
@@ -541,7 +559,8 @@ as $$
       ww.user_id,
       count(*) as weekly_titles
     from public.weekly_winners ww
-    where ww.week_start between p_season_start and p_season_end
+    where p_phase = 'regular_season'
+      and ww.week_start between p_season_start and p_season_end
     group by ww.user_id
   )
   select
@@ -571,7 +590,8 @@ $$;
 
 create or replace function public.get_recap_style_stats(
   p_season_start date,
-  p_season_end date
+  p_season_end date,
+  p_phase text default 'regular_season'
 )
 returns table (
   user_id uuid,
@@ -605,6 +625,7 @@ as $$
     select *
     from public.recap_pick_results
     where game_date between p_season_start and p_season_end
+      and coalesce(season_phase, 'regular_season') = p_phase
       and is_correct is not null
   ),
   game_team_counts as (
@@ -699,6 +720,7 @@ $$;
 create or replace function public.get_recap_team_breakdown(
   p_season_start date,
   p_season_end date,
+  p_phase text default 'regular_season',
   p_user_id uuid default null
 )
 returns table (
@@ -724,6 +746,7 @@ as $$
     select *
     from public.recap_pick_results
     where game_date between p_season_start and p_season_end
+      and coalesce(season_phase, 'regular_season') = p_phase
       and is_correct is not null
       and (p_user_id is null or user_id = p_user_id)
   ),

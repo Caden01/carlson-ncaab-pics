@@ -2,7 +2,14 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { fetchDailyGames } from "../lib/espn";
 import { didTeamCover } from "../lib/gameLogic";
-import { Loader2, RefreshCw, Download } from "lucide-react";
+import {
+  hasMajorConferenceTeam,
+  hasValidSpread,
+  isIncludedConferenceTournament,
+  isRegularSeasonGame,
+  isSpreadTooHigh,
+} from "../lib/gameFilters";
+import { Loader2, RefreshCw, Download, ShieldAlert, Sparkles, Database } from "lucide-react";
 import ConfirmModal from "../components/ConfirmModal";
 
 export default function Admin() {
@@ -31,27 +38,15 @@ export default function Admin() {
 
       let importedCount = 0;
       for (const game of games) {
-        // Filter: Only import games with spread <= 12. Skip if no spread.
-        if (
-          game.spread_value === null ||
-          game.spread_value === undefined ||
-          Math.abs(game.spread_value) > 12
-        ) {
+        if (!hasValidSpread(game)) {
           continue;
         }
 
-        // Filter: Must include at least one team from major conferences
-        // ACC: 2, Big East: 4, Big Ten: 7, Big 12: 8, SEC: 23
-        const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
-        // Convert to strings, handling null/undefined
-        const teamAConf =
-          game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
-        const teamBConf =
-          game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
-        if (
-          (teamAConf == null || !MAJOR_CONFERENCES.includes(teamAConf)) &&
-          (teamBConf == null || !MAJOR_CONFERENCES.includes(teamBConf))
-        ) {
+        if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
+          continue;
+        }
+
+        if (!hasMajorConferenceTeam(game)) {
           continue;
         }
 
@@ -99,6 +94,8 @@ export default function Admin() {
               team_b_rank: game.team_b_rank,
               team_a_abbrev: game.team_a_abbrev,
               team_b_abbrev: game.team_b_abbrev,
+              season_phase: game.season_phase,
+              tournament_name: game.tournament_name,
               game_date: game.game_date,
             },
           ]);
@@ -229,6 +226,10 @@ export default function Admin() {
   };
 
   const calculatePoints = async (gameId, gameData) => {
+    if (!isRegularSeasonGame(gameData)) {
+      return;
+    }
+
     // Get all picks for this game
     const { data: picks, error: picksError } = await supabase
       .from("picks")
@@ -314,10 +315,14 @@ export default function Admin() {
 
       if (gamesError) throw gamesError;
 
-      setMessage(`Recalculating for ${finishedGames.length} finished games...`);
+      const regularSeasonGames = (finishedGames || []).filter(isRegularSeasonGame);
+
+      setMessage(
+        `Recalculating for ${regularSeasonGames.length} regular-season games...`
+      );
 
       let processedGames = 0;
-      for (const game of finishedGames) {
+      for (const game of regularSeasonGames) {
         await calculatePoints(game.id, game);
         processedGames++;
       }
@@ -333,85 +338,123 @@ export default function Admin() {
     }
   };
 
+  const messageTone =
+    message && !message.toLowerCase().startsWith("error") ? "success" : "error";
+
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <h1>Admin Panel</h1>
-        <p>Manage games and scores.</p>
-      </header>
+    <div className="dashboard-container app-page-content">
+      <section className="app-page-hero">
+        <div className="app-page-hero-copy">
+          <div className="app-page-eyebrow">
+            <Sparkles size={14} />
+            Operations console
+          </div>
+          <div className="app-page-title-row">
+            <div className="app-page-icon">
+              <ShieldAlert size={22} />
+            </div>
+            <div>
+              <h1 className="app-page-title">Admin Panel</h1>
+              <p className="app-page-subtitle">
+                Manage imports, sync live results, and recalculate standings
+                without leaving the recap-style shell.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="app-page-hero-side">
+          <div className="app-page-meta-grid">
+            <div className="app-page-meta-card">
+              <span>Import Date</span>
+              <strong>{date}</strong>
+            </div>
+            <div className="app-page-meta-card">
+              <span>Status</span>
+              <strong>{loading ? "Running" : "Idle"}</strong>
+            </div>
+            <div className="app-page-meta-card">
+              <span>Mode</span>
+              <strong>Manual</strong>
+            </div>
+          </div>
+          <p className="helper-text">
+            Use this screen for one-off operational tasks. Regular-season
+            standings recalculations still exclude tournament games.
+          </p>
+        </div>
+      </section>
 
-      <div
-        className="auth-card"
-        style={{ maxWidth: "600px", margin: "0 auto" }}
-      >
-        <h2>ESPN Integration</h2>
-
-        <div className="form-group">
-          <label>Date (YYYYMMDD)</label>
-          <input
-            type="text"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            placeholder="20251126"
-          />
+      <section className="app-page-panel">
+        <div className="page-panels-grid">
+          <div className="page-stack">
+            <div className="app-page-eyebrow">
+              <Database size={14} />
+              ESPN integration
+            </div>
+            <h2 style={{ margin: 0 }}>Run import and sync actions</h2>
+            <p className="helper-text">
+              Import fresh slates by date, sync unfinished games, or fully
+              rebuild leaderboard totals from finished regular-season results.
+            </p>
+          </div>
+          <div className="page-stack">
+            <div className="app-field">
+              <label htmlFor="admin-date">Date (YYYYMMDD)</label>
+              <input
+                id="admin-date"
+                type="text"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                placeholder="20251126"
+                className="app-input"
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-4 mb-4">
+        <div className="page-actions" style={{ marginTop: "1rem" }}>
           <button
             onClick={handleImportGames}
             disabled={loading}
-            className="btn btn-primary flex-1 flex items-center justify-center gap-2"
+            className="app-button btn-primary"
           >
-            {loading ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <Download size={20} />
-            )}
+            {loading ? <Loader2 className="animate-spin" /> : <Download size={18} />}
             Import Games
           </button>
 
           <button
             onClick={handleSyncScores}
             disabled={loading}
-            className="btn btn-primary flex-1 flex items-center justify-center gap-2"
-            style={{ backgroundColor: "#0f172a" }} // Slate 900
+            className="app-button app-button-secondary"
           >
-            {loading ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <RefreshCw size={20} />
-            )}
+            {loading ? <Loader2 className="animate-spin" /> : <RefreshCw size={18} />}
             Sync Scores
           </button>
-        </div>
 
-        <div className="mb-4">
           <button
             onClick={() => setShowRecalcConfirm(true)}
             disabled={loading}
-            className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+            className="app-button"
+            style={{
+              background: "rgba(127, 29, 29, 0.4)",
+              color: "#fecaca",
+              borderColor: "rgba(248, 113, 113, 0.35)",
+            }}
           >
-            {loading ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <RefreshCw size={20} />
-            )}
+            {loading ? <Loader2 className="animate-spin" /> : <RefreshCw size={18} />}
             Recalculate All Stats
           </button>
         </div>
 
         {message && (
           <div
-            className={`auth-error ${
-              message.includes("Success") || message.includes("Synced")
-                ? "bg-green-50 text-green-700 border-green-200"
-                : ""
-            }`}
+            className={`app-message ${messageTone === "success" ? "success" : ""}`}
+            style={{ marginTop: "1rem" }}
           >
             {message}
           </div>
         )}
-      </div>
+      </section>
 
       <ConfirmModal
         isOpen={showRecalcConfirm}

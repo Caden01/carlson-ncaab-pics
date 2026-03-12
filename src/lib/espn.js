@@ -1,3 +1,9 @@
+import {
+  getGameSeasonPhase,
+  getGameTournamentName,
+  getTournamentHeadlineFromCompetition,
+} from "./gameFilters.js";
+
 /**
  * Team name aliases for matching between ESPN and Odds API
  * All keys and values should be lowercase
@@ -478,6 +484,14 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
             : null;
         };
 
+        const tournamentHeadline = getTournamentHeadlineFromCompetition(competition);
+        const seasonPhase = getGameSeasonPhase({
+          tournament_headline: tournamentHeadline,
+        });
+        const tournamentName = getGameTournamentName({
+          tournament_headline: tournamentHeadline,
+        });
+
         return {
           external_id: event.id,
           start_time: event.date, // ISO string
@@ -499,6 +513,10 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
           team_b_rank: getRank(homeTeam),
           team_b_conf_id: homeTeam.team.conferenceId,
           team_b_abbrev: homeTeam.team.abbreviation,
+          season_phase: seasonPhase,
+          tournament_name: tournamentName,
+          tournament_headline: tournamentHeadline,
+          is_conference_tournament: competition.conferenceCompetition === true,
           game_date: `${date.substring(0, 4)}-${date.substring(
             4,
             6
@@ -763,6 +781,14 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
             : null;
         };
 
+        const tournamentHeadline = getTournamentHeadlineFromCompetition(competition);
+        const seasonPhase = getGameSeasonPhase({
+          tournament_headline: tournamentHeadline,
+        });
+        const tournamentName = getGameTournamentName({
+          tournament_headline: tournamentHeadline,
+        });
+
         return {
           external_id: event.id,
           start_time: event.date,
@@ -781,6 +807,10 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
           team_b_rank: getRank(homeTeam),
           team_b_conf_id: homeTeam.team.conferenceId,
           team_b_abbrev: homeTeam.team.abbreviation,
+          season_phase: seasonPhase,
+          tournament_name: tournamentName,
+          tournament_headline: tournamentHeadline,
+          is_conference_tournament: competition.conferenceCompetition === true,
           game_date: `${date.substring(0, 4)}-${date.substring(
             4,
             6

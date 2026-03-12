@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { clearE2EBypass, E2E_USER, isE2EBypassEnabled } from "../lib/e2eBypass";
 
 const AuthContext = createContext({});
 
@@ -7,11 +8,19 @@ const AuthContext = createContext({});
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const bypassEnabled = isE2EBypassEnabled();
+  const [user, setUser] = useState(bypassEnabled ? E2E_USER : null);
+  const [isAdmin, setIsAdmin] = useState(bypassEnabled);
+  const [loading, setLoading] = useState(!bypassEnabled);
 
   useEffect(() => {
+    if (isE2EBypassEnabled()) {
+      setUser(E2E_USER);
+      setIsAdmin(true);
+      setLoading(false);
+      return () => {};
+    }
+
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -67,6 +76,10 @@ export const AuthProvider = ({ children }) => {
         },
       }),
     signOut: () => {
+      if (isE2EBypassEnabled()) {
+        clearE2EBypass();
+        setUser(null);
+      }
       setIsAdmin(false);
       return supabase.auth.signOut();
     },

@@ -6,8 +6,9 @@ DECLARE
     calc_wins INTEGER;
     calc_losses INTEGER;
 BEGIN
-    -- Only run if the game is finished
-    IF NEW.status = 'finished' THEN
+    -- Only run if the game is a finished regular-season game
+    IF NEW.status = 'finished'
+       AND COALESCE(NEW.season_phase, 'regular_season') = 'regular_season' THEN
         
         -- Find all users who picked this game
         FOR user_record IN SELECT DISTINCT user_id FROM public.picks WHERE game_id = NEW.id LOOP
@@ -41,7 +42,9 @@ BEGIN
                     END as is_correct
                 FROM public.picks p
                 JOIN public.games g ON p.game_id = g.id
-                WHERE p.user_id = user_record.user_id AND g.status = 'finished'
+                WHERE p.user_id = user_record.user_id
+                  AND g.status = 'finished'
+                  AND COALESCE(g.season_phase, 'regular_season') = 'regular_season'
             ) as user_picks
             WHERE is_correct IS NOT NULL; -- Only count determined outcomes
 

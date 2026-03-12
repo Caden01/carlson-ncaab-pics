@@ -42,6 +42,8 @@ create table games (
   team_b_rank integer,
   team_a_abbrev text,
   team_b_abbrev text,
+  season_phase text default 'regular_season',
+  tournament_name text,
   game_date date, -- Stores the "scheduled date" (YYYY-MM-DD) to handle timezone issues
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

@@ -12,10 +12,18 @@ export default function ConfirmModal({
 }) {
   if (!isOpen) return null;
 
-  const confirmButtonClass =
+  const confirmButtonStyle =
     variant === "danger"
-      ? "bg-red-600 hover:bg-red-700"
-      : "bg-amber-600 hover:bg-amber-700";
+      ? {
+          background: "rgba(127, 29, 29, 0.55)",
+          color: "#fecaca",
+          borderColor: "rgba(248, 113, 113, 0.35)",
+        }
+      : {
+          background: "rgba(120, 53, 15, 0.55)",
+          color: "#fde68a",
+          borderColor: "rgba(251, 191, 36, 0.35)",
+        };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -26,11 +34,12 @@ export default function ConfirmModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-700 shadow-xl">
+      <div className="relative app-page-panel max-w-md w-full mx-4">
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+          className="app-button app-button-secondary"
+          style={{ position: "absolute", top: "1rem", right: "1rem", padding: "0.6rem" }}
         >
           <X size={20} />
         </button>
@@ -61,7 +70,8 @@ export default function ConfirmModal({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3 bg-slate-700 text-white rounded-xl font-semibold hover:bg-slate-600 transition-colors"
+            className="app-button app-button-secondary"
+            style={{ flex: 1 }}
           >
             {cancelText}
           </button>
@@ -70,7 +80,8 @@ export default function ConfirmModal({
               onConfirm();
               onClose();
             }}
-            className={`flex-1 py-3 text-white rounded-xl font-semibold transition-colors ${confirmButtonClass}`}
+            className="app-button"
+            style={{ ...confirmButtonStyle, flex: 1 }}
           >
             {confirmText}
           </button>
