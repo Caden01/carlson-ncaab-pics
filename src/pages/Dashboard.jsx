@@ -19,6 +19,7 @@ import { getAvatarGradient } from "../lib/utils";
 import { fetchDailyGames } from "../lib/espn";
 import { didTeamCover } from "../lib/gameLogic";
 import { importGamesForDate } from "../lib/gameImport";
+import { MARCH_MADNESS_PHASE } from "../lib/gameFilters";
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
@@ -483,9 +484,16 @@ export default function Dashboard() {
     undefined,
     { weekday: "long", month: "long", day: "numeric" }
   );
-  const liveGamesCount = games.filter((game) => game.status === "in_progress").length;
-  const lockedGamesCount = games.filter((game) => isGameLocked(game.start_time)).length;
-  const finishedGamesCount = games.filter((game) => game.status === "finished").length;
+  const displayedGames = games.filter(
+    (game) => game.season_phase === MARCH_MADNESS_PHASE
+  );
+  const liveGamesCount = displayedGames.filter((game) => game.status === "in_progress").length;
+  const lockedGamesCount = displayedGames.filter((game) => isGameLocked(game.start_time)).length;
+  const finishedGamesCount = displayedGames.filter((game) => game.status === "finished").length;
+  const boardTitle = "March Madness";
+  const boardSubtitle =
+    "Make spread picks for the tournament slate, including next-day games once they are preloaded.";
+  const emptyMessage = "No March Madness games are loaded for this date.";
 
   return (
     <div className="dashboard-container app-page-content">
@@ -493,18 +501,15 @@ export default function Dashboard() {
         <div className="app-page-hero-copy">
           <div className="app-page-eyebrow">
             <Sparkles size={14} />
-            Daily board
+            {boardTitle}
           </div>
           <div className="app-page-title-row">
             <div className="app-page-icon">
               <Trophy size={22} />
             </div>
             <div>
-              <h1 className="app-page-title">Dashboard</h1>
-              <p className="app-page-subtitle">
-                Make picks, track live scores, and keep the whole slate in one
-                recap-style control room.
-              </p>
+              <h1 className="app-page-title">March Madness Picks</h1>
+              <p className="app-page-subtitle">{boardSubtitle}</p>
             </div>
           </div>
         </div>
@@ -528,7 +533,7 @@ export default function Dashboard() {
           <div className="app-page-meta-grid">
             <div className="app-page-meta-card">
               <span>Games</span>
-              <strong>{games.length}</strong>
+              <strong>{displayedGames.length}</strong>
             </div>
             <div className="app-page-meta-card">
               <span>Live</span>
@@ -598,13 +603,20 @@ export default function Dashboard() {
         </section>
       )}
 
-      {games.length === 0 ? (
+      <div className="leaderboard-tabs" style={{ marginBottom: "1.5rem" }}>
+        <button className="tab-btn active" type="button">
+          <Flame size={16} />
+          <span>March Madness</span>
+        </button>
+      </div>
+
+      {displayedGames.length === 0 ? (
         <div className="empty-state">
-          <p>No games scheduled for this date.</p>
+          <p>{emptyMessage}</p>
         </div>
       ) : (
         <div className="games-grid">
-          {games.map((game) => {
+          {displayedGames.map((game) => {
             const isLocked = isGameLocked(game.start_time);
             const gamePicks = picks[game.id] || [];
             const userPickObj = gamePicks.find(
@@ -638,6 +650,12 @@ export default function Dashboard() {
                       <span className="cover-badge">
                         <Flame size={14} />
                         {game.tournament_name || "Tournament"}
+                      </span>
+                    )}
+                    {game.season_phase === MARCH_MADNESS_PHASE && (
+                      <span className="cover-badge">
+                        <Trophy size={14} />
+                        {game.tournament_name || "March Madness"}
                       </span>
                     )}
                   </div>

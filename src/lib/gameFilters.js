@@ -1,14 +1,31 @@
 export const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
 export const REGULAR_SEASON_PHASE = "regular_season";
 export const CONFERENCE_TOURNAMENT_PHASE = "conference_tournament";
+export const MARCH_MADNESS_PHASE = "march_madness";
 
-const EXEMPT_TOURNAMENT_PATTERNS = [
+const CONFERENCE_TOURNAMENT_PATTERNS = [
   /acc tournament/i,
   /big ten tournament/i,
   /big 12 (tournament|championship)/i,
   /sec tournament/i,
   /big east tournament/i,
 ];
+
+const MARCH_MADNESS_INCLUDED_PATTERNS = [
+  /ncaa.*first round/i,
+  /ncaa.*second round/i,
+  /ncaa.*sweet\s*16/i,
+  /ncaa.*elite\s*8/i,
+  /ncaa.*elite\s*eight/i,
+  /ncaa.*regional semifinal/i,
+  /ncaa.*regional final/i,
+  /ncaa.*final four/i,
+  /ncaa.*national semifinal/i,
+  /ncaa.*national championship/i,
+  /march madness/i,
+];
+
+const MARCH_MADNESS_EXCLUDED_PATTERNS = [/first four/i, /play-?in/i];
 
 export function getTournamentHeadlineFromCompetition(competition) {
   const notes = competition?.notes ?? [];
@@ -29,6 +46,10 @@ export function hasMajorConferenceTeam(game) {
   );
 }
 
+function getTournamentHeadline(game) {
+  return game?.tournament_headline || game?.tournament_name || "";
+}
+
 export function hasValidSpread(game) {
   return !(
     game.spread_value === null ||
@@ -46,24 +67,56 @@ export function isSpreadTooHigh(game) {
 }
 
 export function isIncludedConferenceTournament(game) {
-  const headline = game.tournament_headline || "";
-  return EXEMPT_TOURNAMENT_PATTERNS.some((pattern) => pattern.test(headline));
+  const headline = getTournamentHeadline(game);
+  return CONFERENCE_TOURNAMENT_PATTERNS.some((pattern) => pattern.test(headline));
+}
+
+export function isMarchMadnessGame(game) {
+  const headline = getTournamentHeadline(game);
+  if (!headline) return false;
+  if (MARCH_MADNESS_EXCLUDED_PATTERNS.some((pattern) => pattern.test(headline))) {
+    return false;
+  }
+
+  return MARCH_MADNESS_INCLUDED_PATTERNS.some((pattern) => pattern.test(headline));
+}
+
+export function shouldIncludeMatchup(game) {
+  return isMarchMadnessGame(game) || hasMajorConferenceTeam(game);
+}
+
+export function isSpreadLimitExempt(game) {
+  return isIncludedConferenceTournament(game) || isMarchMadnessGame(game);
 }
 
 export function getGameSeasonPhase(game) {
+  if (isMarchMadnessGame(game)) {
+    return MARCH_MADNESS_PHASE;
+  }
+
   return isIncludedConferenceTournament(game)
     ? CONFERENCE_TOURNAMENT_PHASE
     : REGULAR_SEASON_PHASE;
 }
 
 export function getGameTournamentName(game) {
-  return isIncludedConferenceTournament(game)
-    ? game.tournament_headline || null
-    : null;
+  if (isMarchMadnessGame(game)) {
+    return game.tournament_headline || "March Madness";
+  }
+
+  return isIncludedConferenceTournament(game) ? game.tournament_headline || null : null;
 }
 
 export function isRegularSeasonGame(game) {
   return (
     (game?.season_phase || REGULAR_SEASON_PHASE) === REGULAR_SEASON_PHASE
   );
+}
+
+export function isConferenceTournamentGame(game) {
+  return game?.season_phase === CONFERENCE_TOURNAMENT_PHASE;
+}
+
+export function isMarchMadnessPhaseGame(game) {
+  return game?.season_phase === MARCH_MADNESS_PHASE;
 }

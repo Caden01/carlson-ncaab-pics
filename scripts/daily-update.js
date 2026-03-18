@@ -2,11 +2,12 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchDailyGames } from "../src/lib/espn.js";
 import { didTeamCover } from "../src/lib/gameLogic.js";
 import {
-  hasMajorConferenceTeam,
   hasValidSpread,
-  isIncludedConferenceTournament,
+  isMarchMadnessGame,
   isRegularSeasonGame,
+  isSpreadLimitExempt,
   isSpreadTooHigh,
+  shouldIncludeMatchup,
 } from "../src/lib/gameFilters.js";
 
 // Optional: Use The Odds API for more reliable spread data
@@ -127,6 +128,11 @@ function shouldImportGames() {
   return pstHour >= 7;
 }
 
+function shouldPreloadTomorrowGames() {
+  const pstHour = getPSTHour();
+  return pstHour >= 15;
+}
+
 async function syncActiveGames() {
   console.log("--- Syncing Active Games ---");
   try {
@@ -172,7 +178,7 @@ async function syncActiveGames() {
           if (
             !dbGame.spread &&
             isSpreadTooHigh(espnGame) &&
-            !isIncludedConferenceTournament(espnGame)
+            !isSpreadLimitExempt(espnGame)
           ) {
             // Check if game has picks
             const { data: picks } = await supabase
@@ -273,7 +279,14 @@ function getYesterdayPSTDate() {
   return formatDatePST(yesterday);
 }
 
-async function importGamesForDate(dateStr, dateName) {
+function getTomorrowPSTDate() {
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  return formatDatePST(tomorrow);
+}
+
+async function importGamesForDate(dateStr, dateName, options = {}) {
+  const { marchMadnessOnly = false } = options;
   console.log(`\n--- Importing Games for ${dateName}: ${dateStr} ---`);
 
   // Use hybrid approach if Odds API key is available, otherwise ESPN only
@@ -287,9 +300,15 @@ async function importGamesForDate(dateStr, dateName) {
   let importedCount = 0;
   let skippedSpread = 0;
   let skippedConference = 0;
+  let skippedPhase = 0;
 
   for (const game of games) {
-    if (!hasMajorConferenceTeam(game)) {
+    if (marchMadnessOnly && !isMarchMadnessGame(game)) {
+      skippedPhase++;
+      continue;
+    }
+
+    if (!shouldIncludeMatchup(game)) {
       const teamAConf =
         game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
       const teamBConf =
@@ -309,7 +328,7 @@ async function importGamesForDate(dateStr, dateName) {
       continue;
     }
 
-    if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
+    if (isSpreadTooHigh(game) && !isSpreadLimitExempt(game)) {
       console.log(
         `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
       );
@@ -341,39 +360,52 @@ async function importGamesForDate(dateStr, dateName) {
       continue;
     }
 
+    const gamePayload = {
+      external_id: game.external_id,
+      team_a: game.team_a,
+      team_b: game.team_b,
+      start_time: game.start_time,
+      status:
+        game.status === "pre"
+          ? "scheduled"
+          : game.status === "post"
+          ? "finished"
+          : "in_progress",
+      result_a: game.result_a,
+      result_b: game.result_b,
+      spread: game.spread,
+      team_a_record: game.team_a_record,
+      team_a_rank: game.team_a_rank,
+      team_b_record: game.team_b_record,
+      team_b_rank: game.team_b_rank,
+      team_a_abbrev: game.team_a_abbrev,
+      team_b_abbrev: game.team_b_abbrev,
+      season_phase: game.season_phase,
+      tournament_name: game.tournament_name,
+      game_date: game.game_date,
+    };
+
     if (!existing) {
-      const { error } = await supabase.from("games").insert([
-        {
-          external_id: game.external_id,
-          team_a: game.team_a,
-          team_b: game.team_b,
-          start_time: game.start_time,
-          status:
-            game.status === "pre"
-              ? "scheduled"
-              : game.status === "post"
-              ? "finished"
-              : "in_progress",
-          result_a: game.result_a,
-          result_b: game.result_b,
-          spread: game.spread,
-          team_a_record: game.team_a_record,
-          team_a_rank: game.team_a_rank,
-          team_b_record: game.team_b_record,
-          team_b_rank: game.team_b_rank,
-          team_a_abbrev: game.team_a_abbrev,
-          team_b_abbrev: game.team_b_abbrev,
-            season_phase: game.season_phase,
-            tournament_name: game.tournament_name,
-          game_date: game.game_date,
-        },
-      ]);
+      const { error } = await supabase.from("games").insert([gamePayload]);
       if (!error) importedCount++;
       else console.error("Error inserting game:", error);
+    } else {
+      const { error } = await supabase
+        .from("games")
+        .update({
+          season_phase: gamePayload.season_phase,
+          tournament_name: gamePayload.tournament_name,
+          game_date: gamePayload.game_date,
+        })
+        .eq("id", existing.id);
+
+      if (error) {
+        console.error("Error updating existing game classification:", error);
+      }
     }
   }
 
-  return { imported: importedCount, skippedSpread, skippedConference };
+  return { imported: importedCount, skippedSpread, skippedConference, skippedPhase };
 }
 
 async function importTodaysGames() {
@@ -403,8 +435,10 @@ async function importTodaysGames() {
     // Get today's and yesterday's dates in PST/PDT
     const todayPST = getPSTDate();
     const yesterdayPST = getYesterdayPSTDate();
+    const tomorrowPST = getTomorrowPSTDate();
     const todayDateStr = todayPST.replace(/-/g, "");
     const yesterdayDateStr = yesterdayPST.replace(/-/g, "");
+    const tomorrowDateStr = tomorrowPST.replace(/-/g, "");
 
     if (ODDS_API_KEY) {
       console.log("Using hybrid approach: ESPN game data + Odds API spreads");
@@ -426,18 +460,35 @@ async function importTodaysGames() {
       `today (${todayPST})`
     );
 
+    let tomorrowResults = { imported: 0, skippedSpread: 0, skippedConference: 0, skippedPhase: 0 };
+    if (shouldPreloadTomorrowGames()) {
+      tomorrowResults = await importGamesForDate(
+        tomorrowDateStr,
+        `tomorrow (${tomorrowPST}) [March Madness preload]`,
+        { marchMadnessOnly: true }
+      );
+    }
+
     console.log(`\n=== Import Summary ===`);
     console.log(`Yesterday: ${yesterdayResults.imported} new games imported`);
     console.log(`Today: ${todayResults.imported} new games imported`);
+    console.log(`Tomorrow (March Madness only): ${tomorrowResults.imported} new games imported`);
     console.log(
       `Total skipped (spread > 12 or no spread): ${
-        yesterdayResults.skippedSpread + todayResults.skippedSpread
+        yesterdayResults.skippedSpread +
+        todayResults.skippedSpread +
+        tomorrowResults.skippedSpread
       }`
     );
     console.log(
       `Total skipped (conference): ${
-        yesterdayResults.skippedConference + todayResults.skippedConference
+        yesterdayResults.skippedConference +
+        todayResults.skippedConference +
+        tomorrowResults.skippedConference
       }`
+    );
+    console.log(
+      `Total skipped (not March Madness preload target): ${tomorrowResults.skippedPhase}`
     );
   } catch (error) {
     console.error("Error importing games:", error);

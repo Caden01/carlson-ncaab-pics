@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { isRegularSeasonGame } from "../lib/gameFilters";
+import {
+  CONFERENCE_TOURNAMENT_PHASE,
+  MARCH_MADNESS_PHASE,
+  isConferenceTournamentGame,
+  isMarchMadnessPhaseGame,
+  isRegularSeasonGame,
+} from "../lib/gameFilters";
 import {
   Trophy,
   Medal,
@@ -22,7 +28,7 @@ export default function Leaderboard() {
   const [leaderboardData, setLeaderboardData] = useState([]);
   const [weeklyWinners, setWeeklyWinners] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("week"); // 'daily', 'week', 'season', 'tournament'
+  const [activeTab, setActiveTab] = useState("week"); // 'daily', 'week', 'season', 'tournament', 'march_madness'
   const [showWeeklyChampions, setShowWeeklyChampions] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [weekRecords, setWeekRecords] = useState({});
@@ -190,6 +196,37 @@ export default function Leaderboard() {
     }
   };
 
+  const getSecondaryRecordMeta = () => {
+    if (activeTab === "season") {
+      return {
+        columnLabel: "March Madness",
+        shortLabel: "MM",
+        winsKey: "marchMadnessWins",
+        lossesKey: "marchMadnessLosses",
+      };
+    }
+
+    if (activeTab === "tournament") {
+      return {
+        columnLabel: "Regular Season",
+        shortLabel: "Reg",
+        winsKey: "regularSeasonWins",
+        lossesKey: "regularSeasonLosses",
+      };
+    }
+
+    if (activeTab === "march_madness") {
+      return {
+        columnLabel: "Conference Tourney",
+        shortLabel: "CT",
+        winsKey: "conferenceTournamentWins",
+        lossesKey: "conferenceTournamentLosses",
+      };
+    }
+
+    return null;
+  };
+
   const calculateRecords = async (profilesList, period, groupedWinners = weeklyWinners) => {
     try {
       let dateFilter = {};
@@ -202,7 +239,11 @@ export default function Leaderboard() {
       }
       // 'season' = no date filter, use profile totals
 
-      if (period === "season" || period === "tournament") {
+      if (
+        period === "season" ||
+        period === "tournament" ||
+        period === "march_madness"
+      ) {
         const { data: games, error: gamesError } = await supabase
           .from("games")
           .select("*")
@@ -211,7 +252,10 @@ export default function Leaderboard() {
         if (gamesError) throw gamesError;
 
         const regularSeasonGames = (games || []).filter(isRegularSeasonGame);
-        const tournamentGames = (games || []).filter((game) => !isRegularSeasonGame(game));
+        const conferenceTournamentGames = (games || []).filter(
+          isConferenceTournamentGame
+        );
+        const marchMadnessGames = (games || []).filter(isMarchMadnessPhaseGame);
         const allFinishedGameIds = (games || []).map((g) => g.id);
         const picks = await fetchPicksForGameIds(allFinishedGameIds);
 
@@ -220,16 +264,29 @@ export default function Leaderboard() {
           picks,
           profilesList
         );
-        const tournamentRecords = tallyUserRecords(
-          tournamentGames,
+        const conferenceTournamentRecords = tallyUserRecords(
+          conferenceTournamentGames,
+          picks,
+          profilesList
+        );
+        const marchMadnessRecords = tallyUserRecords(
+          marchMadnessGames,
           picks,
           profilesList
         );
 
         const rankedRecords =
-          period === "season" ? regularSeasonRecords : tournamentRecords;
+          period === "season"
+            ? regularSeasonRecords
+            : period === "tournament"
+            ? conferenceTournamentRecords
+            : marchMadnessRecords;
         const comparisonGames =
-          period === "season" ? regularSeasonGames : tournamentGames;
+          period === "season"
+            ? regularSeasonGames
+            : period === "tournament"
+            ? conferenceTournamentGames
+            : marchMadnessGames;
 
         if (comparisonGames.length === 0) {
           const ranked = profilesList
@@ -237,8 +294,12 @@ export default function Leaderboard() {
               ...profile,
               wins: rankedRecords[profile.id]?.wins || 0,
               losses: rankedRecords[profile.id]?.losses || 0,
-              tournamentWins: tournamentRecords[profile.id]?.wins || 0,
-              tournamentLosses: tournamentRecords[profile.id]?.losses || 0,
+              conferenceTournamentWins:
+                conferenceTournamentRecords[profile.id]?.wins || 0,
+              conferenceTournamentLosses:
+                conferenceTournamentRecords[profile.id]?.losses || 0,
+              marchMadnessWins: marchMadnessRecords[profile.id]?.wins || 0,
+              marchMadnessLosses: marchMadnessRecords[profile.id]?.losses || 0,
               regularSeasonWins: regularSeasonRecords[profile.id]?.wins || 0,
               regularSeasonLosses: regularSeasonRecords[profile.id]?.losses || 0,
               weeklyWins: regularSeasonWeeklyWins[profile.id] || 0,
@@ -257,8 +318,12 @@ export default function Leaderboard() {
             ...profile,
             wins: rankedRecords[profile.id]?.wins || 0,
             losses: rankedRecords[profile.id]?.losses || 0,
-            tournamentWins: tournamentRecords[profile.id]?.wins || 0,
-            tournamentLosses: tournamentRecords[profile.id]?.losses || 0,
+              conferenceTournamentWins:
+                conferenceTournamentRecords[profile.id]?.wins || 0,
+              conferenceTournamentLosses:
+                conferenceTournamentRecords[profile.id]?.losses || 0,
+              marchMadnessWins: marchMadnessRecords[profile.id]?.wins || 0,
+              marchMadnessLosses: marchMadnessRecords[profile.id]?.losses || 0,
             regularSeasonWins: regularSeasonRecords[profile.id]?.wins || 0,
             regularSeasonLosses: regularSeasonRecords[profile.id]?.losses || 0,
             weeklyWins: regularSeasonWeeklyWins[profile.id] || 0,
@@ -352,7 +417,9 @@ export default function Leaderboard() {
       case "season":
         return "Regular Season Standings";
       case "tournament":
-        return "Tournament Standings";
+        return "Conference Tournament Standings";
+      case "march_madness":
+        return "March Madness Standings";
       default:
         return "Standings";
     }
@@ -375,9 +442,11 @@ export default function Leaderboard() {
       case "week":
         return "Track the current weekly race and the players building momentum.";
       case "season":
-        return "Regular-season standings with tournament context and weekly crowns.";
+        return "Regular-season standings with March Madness split out into its own race.";
       case "tournament":
-        return "Conference tournament performance, isolated from the regular season.";
+        return "Conference tournament performance, isolated from both the regular season and March Madness.";
+      case "march_madness":
+        return "Track the NCAA tournament race separately from the rest of the season.";
       default:
         return "Track every phase of the competition.";
     }
@@ -695,7 +764,14 @@ export default function Leaderboard() {
             onClick={() => setActiveTab("tournament")}
           >
             <Flame size={16} />
-            <span>Tournament</span>
+            <span>Conference</span>
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "march_madness" ? "active" : ""}`}
+            onClick={() => setActiveTab("march_madness")}
+          >
+            <Crown size={16} />
+            <span>March</span>
           </button>
         </div>
 
@@ -906,19 +982,25 @@ export default function Leaderboard() {
                     {activeTab === "season"
                       ? "Regular Season"
                       : activeTab === "tournament"
-                      ? "Tournament"
+                      ? "Conference Tournament"
+                      : activeTab === "march_madness"
+                      ? "March Madness"
                       : "Record"}
                   </th>
-                  {(activeTab === "season" || activeTab === "tournament") && (
+                  {(activeTab === "season" ||
+                    activeTab === "tournament" ||
+                    activeTab === "march_madness") && (
                     <th className="th-tournament-record">
-                      {activeTab === "season" ? "Tournament" : "Regular Season"}
+                      {getSecondaryRecordMeta()?.columnLabel}
                     </th>
                   )}
                   <th className="th-winrate">
                     {activeTab === "season"
                       ? "Reg Win Rate"
                       : activeTab === "tournament"
-                      ? "Tour Win Rate"
+                      ? "Conf Tour Win Rate"
+                      : activeTab === "march_madness"
+                      ? "MM Win Rate"
                       : "Win Rate"}
                   </th>
                   {activeTab === "season" && (
@@ -931,14 +1013,13 @@ export default function Leaderboard() {
                 {leaderboardData.map((profile, index) => {
                   const wins = profile.wins || 0;
                   const losses = profile.losses || 0;
-                  const tournamentWins =
-                    activeTab === "tournament"
-                      ? profile.regularSeasonWins || 0
-                      : profile.tournamentWins || 0;
-                  const tournamentLosses =
-                    activeTab === "tournament"
-                      ? profile.regularSeasonLosses || 0
-                      : profile.tournamentLosses || 0;
+                  const secondaryRecordMeta = getSecondaryRecordMeta();
+                  const secondaryWins = secondaryRecordMeta
+                    ? profile[secondaryRecordMeta.winsKey] || 0
+                    : 0;
+                  const secondaryLosses = secondaryRecordMeta
+                    ? profile[secondaryRecordMeta.lossesKey] || 0
+                    : 0;
                   const total = wins + losses;
                   const winRate =
                     total > 0 ? ((wins / total) * 100).toFixed(1) : "0.0";
@@ -999,14 +1080,20 @@ export default function Leaderboard() {
                                 </div>
                               )}
                             {(activeTab === "season" ||
-                              activeTab === "tournament") && (
+                              activeTab === "tournament" ||
+                              activeTab === "march_madness") && (
                               <div className="player-record-split">
                                 <span className="player-record-pill">
-                                  {activeTab === "season" ? "Reg" : "Tour"} {wins}-{losses}
+                                  {activeTab === "season"
+                                    ? "Reg"
+                                    : activeTab === "tournament"
+                                    ? "CT"
+                                    : "MM"}{" "}
+                                  {wins}-{losses}
                                 </span>
                                 <span className="player-record-pill player-record-pill-muted">
-                                  {activeTab === "season" ? "Tour" : "Reg"}{" "}
-                                  {tournamentWins}-{tournamentLosses}
+                                  {secondaryRecordMeta?.shortLabel} {secondaryWins}-
+                                  {secondaryLosses}
                                 </span>
                               </div>
                             )}
@@ -1020,10 +1107,12 @@ export default function Leaderboard() {
                         </span>
                       </td>
 
-                      {(activeTab === "season" || activeTab === "tournament") && (
+                      {(activeTab === "season" ||
+                        activeTab === "tournament" ||
+                        activeTab === "march_madness") && (
                         <td className="td-tournament-record">
                           <span className="record-text record-text-muted">
-                            {tournamentWins}-{tournamentLosses}
+                            {secondaryWins}-{secondaryLosses}
                           </span>
                         </td>
                       )}
@@ -1050,14 +1139,21 @@ export default function Leaderboard() {
 
                       <td className="td-mobile-stats">
                         <div className="mobile-stats-container">
-                          {activeTab === "season" || activeTab === "tournament" ? (
+                          {activeTab === "season" ||
+                          activeTab === "tournament" ||
+                          activeTab === "march_madness" ? (
                             <>
                               <span className="record-text">
-                                {activeTab === "season" ? "Reg" : "Tour"} {wins}-{losses}
+                                {activeTab === "season"
+                                  ? "Reg"
+                                  : activeTab === "tournament"
+                                  ? "CT"
+                                  : "MM"}{" "}
+                                {wins}-{losses}
                               </span>
                               <span className="mobile-tournament-record">
-                                {activeTab === "season" ? "Tour" : "Reg"}{" "}
-                                {tournamentWins}-{tournamentLosses}
+                                {secondaryRecordMeta?.shortLabel} {secondaryWins}-
+                                {secondaryLosses}
                               </span>
                             </>
                           ) : (
@@ -1083,7 +1179,8 @@ export default function Leaderboard() {
                       colSpan={
                         activeTab === "season"
                           ? 7
-                          : activeTab === "tournament"
+                          : activeTab === "tournament" ||
+                            activeTab === "march_madness"
                           ? 6
                           : 5
                       }

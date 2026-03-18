@@ -1,10 +1,10 @@
 import { supabase } from "./supabase";
 import { fetchDailyGames } from "./espn";
 import {
-  hasMajorConferenceTeam,
   hasValidSpread,
-  isIncludedConferenceTournament,
+  isSpreadLimitExempt,
   isSpreadTooHigh,
+  shouldIncludeMatchup,
 } from "./gameFilters";
 
 /**
@@ -20,7 +20,7 @@ export const importGamesForDate = async (dateStr) => {
 
     let importedCount = 0;
     for (const game of games) {
-      if (!hasMajorConferenceTeam(game)) {
+      if (!shouldIncludeMatchup(game)) {
         const teamAConf =
           game.team_a_conf_id != null ? String(game.team_a_conf_id) : null;
         const teamBConf =
@@ -38,7 +38,7 @@ export const importGamesForDate = async (dateStr) => {
         continue;
       }
 
-      if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
+      if (isSpreadTooHigh(game) && !isSpreadLimitExempt(game)) {
         console.log(
           `Skipping ${game.team_a} vs ${game.team_b}: Spread ${game.spread_value} > 12`
         );
@@ -74,33 +74,33 @@ export const importGamesForDate = async (dateStr) => {
         continue;
       }
 
+      const gamePayload = {
+        external_id: game.external_id,
+        team_a: game.team_a,
+        team_b: game.team_b,
+        start_time: game.start_time,
+        status:
+          game.status === "pre"
+            ? "scheduled"
+            : game.status === "post"
+            ? "finished"
+            : "in_progress",
+        result_a: game.result_a,
+        result_b: game.result_b,
+        spread: game.spread,
+        team_a_record: game.team_a_record,
+        team_a_rank: game.team_a_rank,
+        team_b_record: game.team_b_record,
+        team_b_rank: game.team_b_rank,
+        team_a_abbrev: game.team_a_abbrev,
+        team_b_abbrev: game.team_b_abbrev,
+        season_phase: game.season_phase,
+        tournament_name: game.tournament_name,
+        game_date: game.game_date,
+      };
+
       if (!existing) {
-        const { error } = await supabase.from("games").insert([
-          {
-            external_id: game.external_id,
-            team_a: game.team_a,
-            team_b: game.team_b,
-            start_time: game.start_time,
-            status:
-              game.status === "pre"
-                ? "scheduled"
-                : game.status === "post"
-                ? "finished"
-                : "in_progress",
-            result_a: game.result_a,
-            result_b: game.result_b,
-            spread: game.spread,
-            team_a_record: game.team_a_record,
-            team_a_rank: game.team_a_rank,
-            team_b_record: game.team_b_record,
-            team_b_rank: game.team_b_rank,
-            team_a_abbrev: game.team_a_abbrev,
-            team_b_abbrev: game.team_b_abbrev,
-            season_phase: game.season_phase,
-            tournament_name: game.tournament_name,
-            game_date: game.game_date,
-          },
-        ]);
+        const { error } = await supabase.from("games").insert([gamePayload]);
         if (error) {
           console.error(
             `Error inserting game ${game.external_id} (${game.team_a} vs ${game.team_b}):`,
@@ -108,6 +108,22 @@ export const importGamesForDate = async (dateStr) => {
           );
         } else {
           importedCount++;
+        }
+      } else {
+        const { error } = await supabase
+          .from("games")
+          .update({
+            season_phase: gamePayload.season_phase,
+            tournament_name: gamePayload.tournament_name,
+            game_date: gamePayload.game_date,
+          })
+          .eq("id", existing.id);
+
+        if (error) {
+          console.error(
+            `Error updating game ${game.external_id} (${game.team_a} vs ${game.team_b}):`,
+            error.message
+          );
         }
       }
     }

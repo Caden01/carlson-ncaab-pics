@@ -3,11 +3,11 @@ import { supabase } from "../lib/supabase";
 import { fetchDailyGames } from "../lib/espn";
 import { didTeamCover } from "../lib/gameLogic";
 import {
-  hasMajorConferenceTeam,
   hasValidSpread,
-  isIncludedConferenceTournament,
+  isSpreadLimitExempt,
   isRegularSeasonGame,
   isSpreadTooHigh,
+  shouldIncludeMatchup,
 } from "../lib/gameFilters";
 import { Loader2, RefreshCw, Download, ShieldAlert, Sparkles, Database } from "lucide-react";
 import ConfirmModal from "../components/ConfirmModal";
@@ -38,15 +38,15 @@ export default function Admin() {
 
       let importedCount = 0;
       for (const game of games) {
+        if (!shouldIncludeMatchup(game)) {
+          continue;
+        }
+
         if (!hasValidSpread(game)) {
           continue;
         }
 
-        if (isSpreadTooHigh(game) && !isIncludedConferenceTournament(game)) {
-          continue;
-        }
-
-        if (!hasMajorConferenceTeam(game)) {
+        if (isSpreadTooHigh(game) && !isSpreadLimitExempt(game)) {
           continue;
         }
 
@@ -72,38 +72,47 @@ export default function Admin() {
           continue;
         }
 
+        const gamePayload = {
+          external_id: game.external_id,
+          team_a: game.team_a,
+          team_b: game.team_b,
+          start_time: game.start_time,
+          status:
+            game.status === "pre"
+              ? "scheduled"
+              : game.status === "post"
+              ? "finished"
+              : "in_progress",
+          result_a: game.result_a,
+          result_b: game.result_b,
+          spread: game.spread,
+          team_a_record: game.team_a_record,
+          team_a_rank: game.team_a_rank,
+          team_b_record: game.team_b_record,
+          team_b_rank: game.team_b_rank,
+          team_a_abbrev: game.team_a_abbrev,
+          team_b_abbrev: game.team_b_abbrev,
+          season_phase: game.season_phase,
+          tournament_name: game.tournament_name,
+          game_date: game.game_date,
+        };
+
         if (!existing) {
-          const { error } = await supabase.from("games").insert([
-            {
-              external_id: game.external_id,
-              team_a: game.team_a,
-              team_b: game.team_b,
-              start_time: game.start_time,
-              status:
-                game.status === "pre"
-                  ? "scheduled"
-                  : game.status === "post"
-                  ? "finished"
-                  : "in_progress",
-              result_a: game.result_a,
-              result_b: game.result_b,
-              spread: game.spread,
-              team_a_record: game.team_a_record,
-              team_a_rank: game.team_a_rank,
-              team_b_record: game.team_b_record,
-              team_b_rank: game.team_b_rank,
-              team_a_abbrev: game.team_a_abbrev,
-              team_b_abbrev: game.team_b_abbrev,
-              season_phase: game.season_phase,
-              tournament_name: game.tournament_name,
-              game_date: game.game_date,
-            },
-          ]);
+          const { error } = await supabase.from("games").insert([gamePayload]);
           if (error) {
             console.error("Error inserting game:", error);
           } else {
             importedCount++;
           }
+        } else {
+          await supabase
+            .from("games")
+            .update({
+              season_phase: gamePayload.season_phase,
+              tournament_name: gamePayload.tournament_name,
+              game_date: gamePayload.game_date,
+            })
+            .eq("id", existing.id);
         }
       }
       setMessage(`Successfully imported ${importedCount} new games.`);
@@ -173,6 +182,8 @@ export default function Admin() {
                 team_a_rank: espnGame.team_a_rank,
                 team_b_record: espnGame.team_b_record,
                 team_b_rank: espnGame.team_b_rank,
+                season_phase: espnGame.season_phase,
+                tournament_name: espnGame.tournament_name,
               };
 
               // Check if teams are swapped in DB compared to ESPN

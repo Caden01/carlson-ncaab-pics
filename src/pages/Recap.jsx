@@ -29,15 +29,26 @@ const RECAP_PHASES = {
     clipLabel: "season clip",
   },
   conference_tournament: {
-    label: "Tournament",
+    label: "Conference Tournament",
     eyebrow: "Conference Tournament Dossier",
-    title: "Tournament Recap",
+    title: "Conference Tournament Recap",
     subtitle:
       "See who handled the neutral-floor chaos best, whose reads held up in tournament settings, and who got hot when the stakes rose.",
     empty: "No tournament recap data yet for the selected date range.",
     loading: "Loading tournament recap...",
     rankSuffix: "in tournament",
     clipLabel: "tournament clip",
+  },
+  march_madness: {
+    label: "March Madness",
+    eyebrow: "March Madness Dossier",
+    title: "March Madness Recap",
+    subtitle:
+      "See who navigated the bracket best, who stayed hot through the biggest rounds, and whose tournament reads held up under the brightest lights.",
+    empty: "No March Madness recap data yet for the selected date range.",
+    loading: "Loading March Madness recap...",
+    rankSuffix: "in March Madness",
+    clipLabel: "March Madness clip",
   },
 };
 
@@ -62,6 +73,8 @@ const buildStyleSummary = (styleStats, recapPhase) => {
   if (!styleStats) {
     return recapPhase === "conference_tournament"
       ? "Still waiting on enough tournament picks to define a style."
+      : recapPhase === "march_madness"
+      ? "Still waiting on enough March Madness picks to define a style."
       : "Still waiting on enough finished picks to define a style.";
   }
 
@@ -84,6 +97,8 @@ const buildStyleSummary = (styleStats, recapPhase) => {
 
   return recapPhase === "conference_tournament"
     ? "Played the tournament board with a balanced style."
+    : recapPhase === "march_madness"
+    ? "Played the bracket with a balanced style."
     : "Played the board with a balanced style all season.";
 };
 
