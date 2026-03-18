@@ -13,7 +13,9 @@ const CONFERENCE_TOURNAMENT_PATTERNS = [
 
 const MARCH_MADNESS_INCLUDED_PATTERNS = [
   /ncaa.*first round/i,
+  /ncaa.*1st round/i,
   /ncaa.*second round/i,
+  /ncaa.*2nd round/i,
   /ncaa.*sweet\s*16/i,
   /ncaa.*elite\s*8/i,
   /ncaa.*elite\s*eight/i,
