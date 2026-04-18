@@ -200,7 +200,7 @@ function teamsMatch(name1, name2) {
 }
 
 /**
- * Fetches NCAAB games for a specific date from ESPN's hidden API.
+ * Fetches NBA games for a specific date from ESPN's hidden API.
  * Optionally uses The Odds API for more reliable spread data.
  *
  * @param {string} date - Date string in YYYYMMDD format (e.g., '20251126').
@@ -216,7 +216,7 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
   // Otherwise, use ESPN only
   try {
     const response = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}&groups=50&limit=1000`
+      `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}&limit=1000`
     );
 
     if (!response.ok) {
@@ -494,6 +494,7 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
 
         return {
           external_id: event.id,
+          season_type: event.season?.type ?? null,
           start_time: event.date, // ISO string
           status: event.status.type.state, // 'pre', 'in', 'post'
           team_a: awayTeam.team.displayName,
@@ -546,10 +547,10 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
     // Fetch from both APIs in parallel
     const [espnResponse, oddsResponse] = await Promise.all([
       fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}&groups=50&limit=1000`
+        `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}&limit=1000`
       ).then((r) => r.json()),
       fetch(
-        `https://api.the-odds-api.com/v4/sports/basketball_ncaab/odds/?regions=us&markets=spreads&dateFormat=iso&commenceTimeFrom=${isoDate}&commenceTimeTo=${year}-${month}-${day}T23:59:59Z&apiKey=${oddsApiKey}`
+        `https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?regions=us&markets=spreads&dateFormat=iso&commenceTimeFrom=${isoDate}&commenceTimeTo=${year}-${month}-${day}T23:59:59Z&apiKey=${oddsApiKey}`
       ).then((r) => {
         if (!r.ok) throw new Error(`Odds API error: ${r.status}`);
         return r.json();
@@ -791,6 +792,7 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
 
         return {
           external_id: event.id,
+          season_type: event.season?.type ?? null,
           start_time: event.date,
           status: event.status.type.state,
           team_a: awayTeam.team.displayName,

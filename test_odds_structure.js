@@ -3,7 +3,7 @@ const test = async () => {
   const date = "20251126";
   try {
     const response = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}`
+      `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}&limit=1000`
     );
     const data = await response.json();
 

@@ -47,7 +47,7 @@ export default function Layout() {
               <div className="brand-icon">
                 <Trophy size={24} color="white" />
               </div>
-              <span className="brand-text">NCAAB Picks</span>
+              <span className="brand-text">NBA Playoff Picks</span>
             </Link>
 
             <button

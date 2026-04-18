@@ -19,7 +19,7 @@ import { getAvatarGradient } from "../lib/utils";
 import { fetchDailyGames } from "../lib/espn";
 import { didTeamCover } from "../lib/gameLogic";
 import { importGamesForDate } from "../lib/gameImport";
-import { MARCH_MADNESS_PHASE } from "../lib/gameFilters";
+import { NBA_PLAYOFFS_PHASE } from "../lib/gameFilters";
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
@@ -485,15 +485,15 @@ export default function Dashboard() {
     { weekday: "long", month: "long", day: "numeric" }
   );
   const displayedGames = games.filter(
-    (game) => game.season_phase === MARCH_MADNESS_PHASE
+    (game) => game.season_phase === NBA_PLAYOFFS_PHASE
   );
   const liveGamesCount = displayedGames.filter((game) => game.status === "in_progress").length;
   const lockedGamesCount = displayedGames.filter((game) => isGameLocked(game.start_time)).length;
   const finishedGamesCount = displayedGames.filter((game) => game.status === "finished").length;
-  const boardTitle = "March Madness";
+  const boardTitle = "NBA Playoffs";
   const boardSubtitle =
-    "Make spread picks for the tournament slate, including next-day games once they are preloaded.";
-  const emptyMessage = "No March Madness games are loaded for this date.";
+    "Make spread picks for the playoff slate, including next-day games once they are preloaded.";
+  const emptyMessage = "No NBA playoff games are loaded for this date.";
 
   return (
     <div className="dashboard-container app-page-content">
@@ -508,7 +508,7 @@ export default function Dashboard() {
               <Trophy size={22} />
             </div>
             <div>
-              <h1 className="app-page-title">March Madness Picks</h1>
+              <h1 className="app-page-title">NBA Playoff Picks</h1>
               <p className="app-page-subtitle">{boardSubtitle}</p>
             </div>
           </div>
@@ -606,7 +606,7 @@ export default function Dashboard() {
       <div className="leaderboard-tabs" style={{ marginBottom: "1.5rem" }}>
         <button className="tab-btn active" type="button">
           <Flame size={16} />
-          <span>March Madness</span>
+          <span>NBA Playoffs</span>
         </button>
       </div>
 
@@ -652,10 +652,10 @@ export default function Dashboard() {
                         {game.tournament_name || "Tournament"}
                       </span>
                     )}
-                    {game.season_phase === MARCH_MADNESS_PHASE && (
+                    {game.season_phase === NBA_PLAYOFFS_PHASE && (
                       <span className="cover-badge">
                         <Trophy size={14} />
-                        {game.tournament_name || "March Madness"}
+                        {game.tournament_name || "NBA Playoffs"}
                       </span>
                     )}
                   </div>

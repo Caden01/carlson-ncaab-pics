@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
-const STORAGE_KEY = "ncaab-scroll-positions";
+const STORAGE_KEY = "nba-playoff-scroll-positions";
 
 /**
  * Hook to save and restore scroll positions per route.

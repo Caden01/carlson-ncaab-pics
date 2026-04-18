@@ -3,7 +3,7 @@ import { fetchDailyGames } from "../src/lib/espn.js";
 import { didTeamCover } from "../src/lib/gameLogic.js";
 import {
   hasValidSpread,
-  isMarchMadnessGame,
+  isNbaPlayoffGame,
   isRegularSeasonGame,
   isSpreadLimitExempt,
   isSpreadTooHigh,
@@ -286,7 +286,7 @@ function getTomorrowPSTDate() {
 }
 
 async function importGamesForDate(dateStr, dateName, options = {}) {
-  const { marchMadnessOnly = false } = options;
+  const { playoffsOnly = false } = options;
   console.log(`\n--- Importing Games for ${dateName}: ${dateStr} ---`);
 
   // Use hybrid approach if Odds API key is available, otherwise ESPN only
@@ -303,7 +303,7 @@ async function importGamesForDate(dateStr, dateName, options = {}) {
   let skippedPhase = 0;
 
   for (const game of games) {
-    if (marchMadnessOnly && !isMarchMadnessGame(game)) {
+    if (playoffsOnly && !isNbaPlayoffGame(game)) {
       skippedPhase++;
       continue;
     }
@@ -464,15 +464,15 @@ async function importTodaysGames() {
     if (shouldPreloadTomorrowGames()) {
       tomorrowResults = await importGamesForDate(
         tomorrowDateStr,
-        `tomorrow (${tomorrowPST}) [March Madness preload]`,
-        { marchMadnessOnly: true }
+        `tomorrow (${tomorrowPST}) [NBA playoff preload]`,
+        { playoffsOnly: true }
       );
     }
 
     console.log(`\n=== Import Summary ===`);
     console.log(`Yesterday: ${yesterdayResults.imported} new games imported`);
     console.log(`Today: ${todayResults.imported} new games imported`);
-    console.log(`Tomorrow (March Madness only): ${tomorrowResults.imported} new games imported`);
+    console.log(`Tomorrow (NBA playoffs only): ${tomorrowResults.imported} new games imported`);
     console.log(
       `Total skipped (spread > 12 or no spread): ${
         yesterdayResults.skippedSpread +
@@ -488,7 +488,7 @@ async function importTodaysGames() {
       }`
     );
     console.log(
-      `Total skipped (not March Madness preload target): ${tomorrowResults.skippedPhase}`
+      `Total skipped (not NBA playoff preload target): ${tomorrowResults.skippedPhase}`
     );
   } catch (error) {
     console.error("Error importing games:", error);

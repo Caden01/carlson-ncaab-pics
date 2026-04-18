@@ -390,7 +390,7 @@ export default function Admin() {
           </div>
           <p className="helper-text">
             Use this screen for one-off operational tasks. Regular-season
-            standings recalculations still exclude tournament games.
+            standings recalculations still exclude playoff games.
           </p>
         </div>
       </section>

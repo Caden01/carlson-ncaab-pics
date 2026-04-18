@@ -3,7 +3,7 @@ name: Sync Game Scores
 on:
   schedule:
     # Run every 15 minutes during the active import/sync window.
-    # This also covers the 3 PM Pacific March Madness preload window.
+    # This also covers the 3 PM Pacific NBA playoff preload window.
     - cron: '*/15 15-23 * * *'  # 3 PM - 11:59 PM UTC (10 AM - 7 PM ET)
     - cron: '*/15 0-7 * * *'    # 12 AM - 7 AM UTC (7 PM - 2 AM ET)
   workflow_dispatch:  # Allow manual trigger

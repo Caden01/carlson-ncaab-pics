@@ -39,16 +39,16 @@ const RECAP_PHASES = {
     rankSuffix: "in tournament",
     clipLabel: "tournament clip",
   },
-  march_madness: {
-    label: "March Madness",
-    eyebrow: "March Madness Dossier",
-    title: "March Madness Recap",
+  nba_playoffs: {
+    label: "NBA Playoffs",
+    eyebrow: "NBA Playoff Dossier",
+    title: "NBA Playoff Recap",
     subtitle:
-      "See who navigated the bracket best, who stayed hot through the biggest rounds, and whose tournament reads held up under the brightest lights.",
-    empty: "No March Madness recap data yet for the selected date range.",
-    loading: "Loading March Madness recap...",
-    rankSuffix: "in March Madness",
-    clipLabel: "March Madness clip",
+      "See who read each series best, who stayed hot as the postseason tightened, and whose playoff angles held up under the brightest lights.",
+    empty: "No NBA playoff recap data yet for the selected date range.",
+    loading: "Loading NBA playoff recap...",
+    rankSuffix: "in the NBA playoffs",
+    clipLabel: "playoff clip",
   },
 };
 
@@ -73,8 +73,8 @@ const buildStyleSummary = (styleStats, recapPhase) => {
   if (!styleStats) {
     return recapPhase === "conference_tournament"
       ? "Still waiting on enough tournament picks to define a style."
-      : recapPhase === "march_madness"
-      ? "Still waiting on enough March Madness picks to define a style."
+      : recapPhase === "nba_playoffs"
+      ? "Still waiting on enough NBA playoff picks to define a style."
       : "Still waiting on enough finished picks to define a style.";
   }
 
@@ -97,8 +97,8 @@ const buildStyleSummary = (styleStats, recapPhase) => {
 
   return recapPhase === "conference_tournament"
     ? "Played the tournament board with a balanced style."
-    : recapPhase === "march_madness"
-    ? "Played the bracket with a balanced style."
+    : recapPhase === "nba_playoffs"
+    ? "Played the playoff board with a balanced style."
     : "Played the board with a balanced style all season.";
 };
 
@@ -142,7 +142,7 @@ function StyleRow({ label, wins, losses, rate }) {
 }
 
 export default function Recap() {
-  const [recapPhase, setRecapPhase] = useState("regular_season");
+  const [recapPhase, setRecapPhase] = useState("nba_playoffs");
   const [seasonRange, setSeasonRange] = useState({
     start: "",
     end: "",
@@ -243,6 +243,8 @@ export default function Recap() {
         setError(
           recapPhase === "conference_tournament"
             ? "No finished conference tournament games found yet."
+            : recapPhase === "nba_playoffs"
+            ? "No finished NBA playoff games found yet."
             : "No finished regular-season games found yet."
         );
         return;

@@ -11,7 +11,7 @@ test.describe("unauthenticated smoke coverage", () => {
     await page.goto("/login");
 
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByText("Carlson NCAAB Picks")).toBeVisible();
+    await expect(page.getByText("Carlson NBA Playoff Picks")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Welcome" })).toBeVisible();
     await expect(
       page.getByRole("button", { name: /sign in with google/i })
@@ -52,9 +52,11 @@ test.describe("authenticated smoke coverage", () => {
     await enableE2EBypass(page);
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "NBA Playoff Picks" })
+    ).toBeVisible();
     await expect(page.getByText("Admin override")).toBeVisible();
-    await expect(page.getByText("ACC Tournament")).toBeVisible();
+    await expect(page.getByText("NBA Playoffs")).toBeVisible();
 
     await page.goto("/profile");
     await expect(page.getByRole("heading", { name: "Your Profile" })).toBeVisible();
@@ -66,20 +68,13 @@ test.describe("authenticated smoke coverage", () => {
 
     await page.goto("/leaderboard");
     await expect(page.getByRole("heading", { name: "Leaderboard" })).toBeVisible();
-    const tournamentTab = page.locator(".leaderboard-tabs .tab-btn").nth(3);
-    await expect(tournamentTab).toBeVisible();
-    await tournamentTab.click();
     await expect(page.locator(".table-header-label")).toContainText(
-      "Tournament Standings"
+      "NBA Playoff Standings"
     );
 
     await page.goto("/recap");
     await expect(
-      page.getByRole("heading", { name: "Season Recap" })
-    ).toBeVisible();
-    await page.locator(".recap-phase-toggle .recap-phase-btn").nth(1).click();
-    await expect(
-      page.getByRole("heading", { name: "Tournament Recap" })
+      page.getByRole("heading", { name: "NBA Playoff Recap" })
     ).toBeVisible();
   });
 

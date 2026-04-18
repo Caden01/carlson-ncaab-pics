@@ -26,7 +26,7 @@ export const importGamesForDate = async (dateStr) => {
         const teamBConf =
           game.team_b_conf_id != null ? String(game.team_b_conf_id) : null;
         console.log(
-          `Skipping ${game.team_a} vs ${game.team_b}: Conf ${teamAConf}/${teamBConf} not major`
+          `Skipping ${game.team_a} vs ${game.team_b}: not an NBA playoff matchup (${teamAConf}/${teamBConf})`
         );
         continue;
       }

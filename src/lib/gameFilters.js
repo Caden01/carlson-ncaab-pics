@@ -1,7 +1,7 @@
 export const MAJOR_CONFERENCES = ["2", "4", "7", "8", "23"];
 export const REGULAR_SEASON_PHASE = "regular_season";
 export const CONFERENCE_TOURNAMENT_PHASE = "conference_tournament";
-export const MARCH_MADNESS_PHASE = "march_madness";
+export const NBA_PLAYOFFS_PHASE = "nba_playoffs";
 
 const CONFERENCE_TOURNAMENT_PATTERNS = [
   /acc tournament/i,
@@ -11,23 +11,16 @@ const CONFERENCE_TOURNAMENT_PATTERNS = [
   /big east tournament/i,
 ];
 
-const MARCH_MADNESS_INCLUDED_PATTERNS = [
-  /ncaa.*first round/i,
-  /ncaa.*1st round/i,
-  /ncaa.*second round/i,
-  /ncaa.*2nd round/i,
-  /ncaa.*sweet\s*16/i,
-  /ncaa.*elite\s*8/i,
-  /ncaa.*elite\s*eight/i,
-  /ncaa.*regional semifinal/i,
-  /ncaa.*regional final/i,
-  /ncaa.*final four/i,
-  /ncaa.*national semifinal/i,
-  /ncaa.*national championship/i,
-  /march madness/i,
+const NBA_PLAYOFF_INCLUDED_PATTERNS = [
+  /east .* round/i,
+  /west .* round/i,
+  /conference semifinals?/i,
+  /conference finals?/i,
+  /nba finals?/i,
+  /playoffs?/i,
 ];
 
-const MARCH_MADNESS_EXCLUDED_PATTERNS = [/first four/i, /play-?in/i];
+const NBA_PLAYOFF_EXCLUDED_PATTERNS = [/play-?in/i];
 
 export function getTournamentHeadlineFromCompetition(competition) {
   const notes = competition?.notes ?? [];
@@ -73,27 +66,35 @@ export function isIncludedConferenceTournament(game) {
   return CONFERENCE_TOURNAMENT_PATTERNS.some((pattern) => pattern.test(headline));
 }
 
-export function isMarchMadnessGame(game) {
+export function isNbaPlayoffGame(game) {
   const headline = getTournamentHeadline(game);
-  if (!headline) return false;
-  if (MARCH_MADNESS_EXCLUDED_PATTERNS.some((pattern) => pattern.test(headline))) {
+  if (
+    headline &&
+    NBA_PLAYOFF_EXCLUDED_PATTERNS.some((pattern) => pattern.test(headline))
+  ) {
     return false;
   }
 
-  return MARCH_MADNESS_INCLUDED_PATTERNS.some((pattern) => pattern.test(headline));
+  if (game?.season_type === 3) {
+    return true;
+  }
+
+  if (!headline) return false;
+
+  return NBA_PLAYOFF_INCLUDED_PATTERNS.some((pattern) => pattern.test(headline));
 }
 
 export function shouldIncludeMatchup(game) {
-  return isMarchMadnessGame(game) || hasMajorConferenceTeam(game);
+  return isNbaPlayoffGame(game);
 }
 
 export function isSpreadLimitExempt(game) {
-  return isIncludedConferenceTournament(game) || isMarchMadnessGame(game);
+  return isNbaPlayoffGame(game);
 }
 
 export function getGameSeasonPhase(game) {
-  if (isMarchMadnessGame(game)) {
-    return MARCH_MADNESS_PHASE;
+  if (isNbaPlayoffGame(game)) {
+    return NBA_PLAYOFFS_PHASE;
   }
 
   return isIncludedConferenceTournament(game)
@@ -102,8 +103,8 @@ export function getGameSeasonPhase(game) {
 }
 
 export function getGameTournamentName(game) {
-  if (isMarchMadnessGame(game)) {
-    return game.tournament_headline || "March Madness";
+  if (isNbaPlayoffGame(game)) {
+    return game.tournament_headline || "NBA Playoffs";
   }
 
   return isIncludedConferenceTournament(game) ? game.tournament_headline || null : null;
@@ -119,6 +120,11 @@ export function isConferenceTournamentGame(game) {
   return game?.season_phase === CONFERENCE_TOURNAMENT_PHASE;
 }
 
-export function isMarchMadnessPhaseGame(game) {
-  return game?.season_phase === MARCH_MADNESS_PHASE;
+export function isNbaPlayoffsPhaseGame(game) {
+  return game?.season_phase === NBA_PLAYOFFS_PHASE;
 }
+
+// Backwards-compatible aliases for older imports/scripts.
+export const MARCH_MADNESS_PHASE = NBA_PLAYOFFS_PHASE;
+export const isMarchMadnessGame = isNbaPlayoffGame;
+export const isMarchMadnessPhaseGame = isNbaPlayoffsPhaseGame;

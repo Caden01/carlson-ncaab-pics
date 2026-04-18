@@ -1,12 +1,12 @@
 /**
- * Alternative API for fetching NCAAB games with spreads using The Odds API
+ * Alternative API for fetching NBA games with spreads using The Odds API
  * Sign up at https://the-odds-api.com/ to get a free API key (500 requests/month)
  *
  * This API provides more reliable spread data from multiple bookmakers.
  */
 
 /**
- * Fetches NCAAB games for a specific date from The Odds API.
+ * Fetches NBA games for a specific date from The Odds API.
  * @param {string} date - Date string in YYYYMMDD format (e.g., '20251126').
  * @param {string} apiKey - Your Odds API key
  * @returns {Promise<Array>} - Array of normalized game objects matching ESPN format.
@@ -19,8 +19,8 @@ export const fetchDailyGamesFromOddsApi = async (date, apiKey) => {
     const day = date.substring(6, 8);
     // Date formatted as ISO string for reference: ${year}-${month}-${day}
 
-    // The Odds API endpoint for NCAAB
-    const url = `https://api.the-odds-api.com/v4/sports/basketball_ncaab/odds/?regions=us&markets=spreads&dateFormat=iso&apiKey=${apiKey}`;
+    // The Odds API endpoint for NBA
+    const url = `https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?regions=us&markets=spreads&dateFormat=iso&apiKey=${apiKey}`;
 
     const response = await fetch(url);
 
@@ -160,7 +160,7 @@ export const fetchDailyGamesHybrid = async (date, oddsApiKey) => {
     // Fetch from both APIs
     const [espnGames, oddsGames] = await Promise.all([
       fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}&groups=50&limit=1000`
+        `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}&limit=1000`
       )
         .then((r) => r.json())
         .then((d) => d.events || []),

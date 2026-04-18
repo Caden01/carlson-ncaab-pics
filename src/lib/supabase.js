@@ -236,7 +236,7 @@ const mockSupabase = {
     signOut: async () => ({ error: null }),
   },
   from: (table) => new MockQueryBuilder(table),
-  rpc: async (_name, _args) => ({ data: [], error: null }),
+  rpc: async () => ({ data: [], error: null }),
   channel: () => ({
     on: () => ({
       subscribe: () => ({

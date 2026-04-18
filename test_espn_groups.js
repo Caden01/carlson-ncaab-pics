@@ -5,7 +5,7 @@ const test = async () => {
   console.log("--- Testing Default Fetch ---");
   try {
     const response = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}`
+      `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}&limit=1000`
     );
     const data = await response.json();
     console.log("Default count:", data.events ? data.events.length : 0);
@@ -16,7 +16,7 @@ const test = async () => {
   console.log("--- Testing Division I (groups=50) ---");
   try {
     const response = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${date}&groups=50&limit=1000`
+      `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}&limit=1000`
     );
     const data = await response.json();
     console.log("Div I count:", data.events ? data.events.length : 0);

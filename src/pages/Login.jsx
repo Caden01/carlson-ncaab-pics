@@ -60,7 +60,7 @@ export default function Login() {
       <div className="auth-card" style={{ width: "min(36rem, 100%)" }}>
         <div className="app-page-eyebrow">
           <Sparkles size={14} />
-          Carlson NCAAB Picks
+          Carlson NBA Playoff Picks
         </div>
         <div className="auth-header">
           <div className="app-page-title-row">
@@ -69,7 +69,7 @@ export default function Login() {
             </div>
             <div>
               <h1>Welcome</h1>
-              <p>Sign in to make your picks and follow the season.</p>
+              <p>Sign in to make your picks and follow the playoff run.</p>
             </div>
           </div>
         </div>
