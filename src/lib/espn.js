@@ -485,12 +485,12 @@ export const fetchDailyGames = async (date, oddsApiKey = null) => {
         };
 
         const tournamentHeadline = getTournamentHeadlineFromCompetition(competition);
-        const seasonPhase = getGameSeasonPhase({
+        const classificationContext = {
+          season_type: event.season?.type ?? null,
           tournament_headline: tournamentHeadline,
-        });
-        const tournamentName = getGameTournamentName({
-          tournament_headline: tournamentHeadline,
-        });
+        };
+        const seasonPhase = getGameSeasonPhase(classificationContext);
+        const tournamentName = getGameTournamentName(classificationContext);
 
         return {
           external_id: event.id,
@@ -783,12 +783,12 @@ async function fetchDailyGamesHybrid(date, oddsApiKey) {
         };
 
         const tournamentHeadline = getTournamentHeadlineFromCompetition(competition);
-        const seasonPhase = getGameSeasonPhase({
+        const classificationContext = {
+          season_type: event.season?.type ?? null,
           tournament_headline: tournamentHeadline,
-        });
-        const tournamentName = getGameTournamentName({
-          tournament_headline: tournamentHeadline,
-        });
+        };
+        const seasonPhase = getGameSeasonPhase(classificationContext);
+        const tournamentName = getGameTournamentName(classificationContext);
 
         return {
           external_id: event.id,

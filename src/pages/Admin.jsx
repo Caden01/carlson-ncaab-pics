@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { fetchDailyGames } from "../lib/espn";
 import { didTeamCover } from "../lib/gameLogic";
+import { refreshGameSpreadsForDate } from "../lib/gameImport";
 import {
   hasValidSpread,
   isSpreadLimitExempt,
@@ -236,6 +237,19 @@ export default function Admin() {
     }
   };
 
+  const handleRefreshSpreads = async () => {
+    setLoading(true);
+    setMessage("");
+    try {
+      const updatedCount = await refreshGameSpreadsForDate(date);
+      setMessage(`Refreshed spreads for ${updatedCount} game${updatedCount === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculatePoints = async (gameId, gameData) => {
     if (!isRegularSeasonGame(gameData)) {
       return;
@@ -406,6 +420,7 @@ export default function Admin() {
             <p className="helper-text">
               Import fresh slates by date, sync unfinished games, or fully
               rebuild leaderboard totals from finished regular-season results.
+              Spreads only change when you run the admin refresh action.
             </p>
           </div>
           <div className="page-stack">
@@ -440,6 +455,15 @@ export default function Admin() {
           >
             {loading ? <Loader2 className="animate-spin" /> : <RefreshCw size={18} />}
             Sync Scores
+          </button>
+
+          <button
+            onClick={handleRefreshSpreads}
+            disabled={loading}
+            className="app-button app-button-secondary"
+          >
+            {loading ? <Loader2 className="animate-spin" /> : <RefreshCw size={18} />}
+            Refresh Spreads
           </button>
 
           <button

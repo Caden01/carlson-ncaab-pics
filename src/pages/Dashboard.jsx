@@ -191,11 +191,15 @@ export default function Dashboard() {
 
       let finalGamesData = gamesData || [];
 
-      // Auto-import if no games found, but ONLY:
+      const playoffGamesData = finalGamesData.filter(
+        (game) => game.season_phase === NBA_PLAYOFFS_PHASE
+      );
+
+      // Auto-import if no playoff games are loaded, but ONLY:
       // 1. For today or past dates (not future)
       // 2. After the designated import time (7am PST)
       // 3. Import has not already been attempted for this date (once per day only)
-      if (finalGamesData.length === 0) {
+      if (playoffGamesData.length === 0) {
         const today = getLocalDate();
         const isFutureDate = selectedDate > today;
         const isImportTime = shouldImportGames();
@@ -205,7 +209,9 @@ export default function Dashboard() {
         const alreadyImported = localStorage.getItem(importKey);
 
         if (!isFutureDate && isImportTime && !alreadyImported) {
-          console.log("No games found in DB, attempting auto-import (once per day)...");
+          console.log(
+            "No playoff games loaded for this date, attempting import/reclassification (once per day)..."
+          );
           const dateStr = selectedDate.replace(/-/g, "");
           
           // Mark as imported BEFORE attempting (so we don't retry on failure)
@@ -213,18 +219,17 @@ export default function Dashboard() {
           
           const importedCount = await importGamesForDate(dateStr);
 
-          if (importedCount > 0) {
-            // Re-fetch games
-            const { data: refetchedGames } = await supabase
-              .from("games")
-              .select("*")
-              .eq("game_date", selectedDate)
-              .order("start_time", { ascending: true })
-              .order("id", { ascending: true });
+          // Always re-fetch because the import may have reclassified existing rows
+          // without inserting new ones.
+          const { data: refetchedGames } = await supabase
+            .from("games")
+            .select("*")
+            .eq("game_date", selectedDate)
+            .order("start_time", { ascending: true })
+            .order("id", { ascending: true });
 
-            if (refetchedGames) {
-              finalGamesData = refetchedGames;
-            }
+          if (refetchedGames) {
+            finalGamesData = refetchedGames;
           }
           
           console.log(`Import complete: ${importedCount} games imported for ${selectedDate}`);

@@ -133,3 +133,79 @@ export const importGamesForDate = async (dateStr) => {
     throw error;
   }
 };
+
+/**
+ * Refreshes spreads for existing games on a specific date.
+ * This is intended for manual admin use only.
+ *
+ * @param {string} dateStr - Date string in YYYYMMDD format.
+ * @returns {Promise<number>} - Number of games whose spreads were updated.
+ */
+export const refreshGameSpreadsForDate = async (dateStr) => {
+  try {
+    const games = await fetchDailyGames(dateStr);
+    if (games.length === 0) return 0;
+
+    let updatedCount = 0;
+    for (const game of games) {
+      if (!shouldIncludeMatchup(game)) {
+        continue;
+      }
+
+      if (!hasValidSpread(game)) {
+        continue;
+      }
+
+      if (isSpreadTooHigh(game) && !isSpreadLimitExempt(game)) {
+        continue;
+      }
+
+      if (!game.external_id) {
+        continue;
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from("games")
+        .select("id, spread, status")
+        .eq("external_id", game.external_id)
+        .maybeSingle();
+
+      if (existingError && existingError.code !== "PGRST116") {
+        console.error(
+          `Error checking game ${game.external_id} for spread refresh:`,
+          existingError.message
+        );
+        continue;
+      }
+
+      // Only refresh spreads for already-imported, unfinished games.
+      if (!existing || existing.status === "finished") {
+        continue;
+      }
+
+      if (existing.spread === game.spread) {
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("games")
+        .update({ spread: game.spread })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        console.error(
+          `Error refreshing spread for game ${game.external_id}:`,
+          updateError.message
+        );
+        continue;
+      }
+
+      updatedCount++;
+    }
+
+    return updatedCount;
+  } catch (error) {
+    console.error("Error refreshing game spreads:", error);
+    throw error;
+  }
+};

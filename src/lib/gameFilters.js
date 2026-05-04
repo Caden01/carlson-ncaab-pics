@@ -12,6 +12,11 @@ const CONFERENCE_TOURNAMENT_PATTERNS = [
 ];
 
 const NBA_PLAYOFF_INCLUDED_PATTERNS = [
+  /east\b.*semifinals?/i,
+  /west\b.*semifinals?/i,
+  /east\b.*finals?/i,
+  /west\b.*finals?/i,
+  /first round/i,
   /east .* round/i,
   /west .* round/i,
   /conference semifinals?/i,
