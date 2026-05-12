@@ -10,18 +10,22 @@ import {
   shouldIncludeMatchup,
 } from "../src/lib/gameFilters.js";
 
-// Optional: Use The Odds API for more reliable spread data
-// Get a free API key at https://the-odds-api.com/ (500 requests/month free)
-// Add ODDS_API_KEY to your GitHub Actions secrets or environment variables
-const ODDS_API_KEY = process.env.ODDS_API_KEY || null;
+// Optional: Use The Odds API for more reliable spread data.
+// Accept both the server-side names used by GitHub Actions and the Vite-prefixed
+// names used elsewhere in this repo so the script is easier to run consistently.
+const ODDS_API_KEY =
+  process.env.ODDS_API_KEY || process.env.VITE_ODDS_API_KEY || null;
 
-// Initialize Supabase client with Service Role Key for admin access (bypass RLS)
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Initialize Supabase client with the service-role key for admin access (bypass RLS).
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("Missing required Supabase environment variables.");
   console.error(
-    "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables."
+    "Expected SUPABASE_URL or VITE_SUPABASE_URL, plus SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_SERVICE_ROLE_KEY."
   );
   process.exit(1);
 }
